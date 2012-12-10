@@ -73,7 +73,7 @@ bool SpmCreator::runOnModule(Module& m)
 
 void SpmCreator::handleFunction(Function& f)
 {
-    if (!isInSpm(f))
+    if (!isInSpm(f) || f.isIntrinsic())
         return;
 
     StringRef origName = f.getName();
@@ -101,7 +101,7 @@ void SpmCreator::handleFunction(Function& f)
         Function* callee = cs.getCalledFunction();
         assert(callee != nullptr && "Function pointers not supported yet");
 
-        if (isInSpm(*callee))
+        if (isInSpm(*callee) || callee->isIntrinsic())
             continue;
 
         cs.setCalledFunction(getStub(*callee));
