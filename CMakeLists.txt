@@ -1,4 +1,4 @@
-project(spm_compiler)
+project(spm-compiler)
 
 cmake_minimum_required(VERSION 2.8)
 
