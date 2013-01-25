@@ -26,8 +26,9 @@ parser.add_argument('--rom-size',
                     choices=['1K', '2K', '4K', '8K', '12K', '16K', '24K',
                              '32K', '41K', '48K', '51K', '54K', '55K'],
                     default='2K')
+parser.add_argument('-rdynamic', action='store_true')
 
-args = parser.parse_args()
+args, ld_args = parser.parse_known_args()
 set_args(args)
 
 # find all defined SPMs
@@ -53,17 +54,21 @@ else:
 text_section = '''.text.spm.{0} :
   {{
     . = ALIGN(2);
+    __spm_{0}_public_start = .;
     *(.spm.{0}.text.entry)
     *(.spm.{0}.text)
     . = ALIGN(2);
+    __spm_{0}_public_end = .;
   }} > REGION_TEXT
 '''
 
 data_section = '''.data.spm.{0} :
   {{
     . = ALIGN(2);
+    __spm_{0}_secret_start = .;
     *(.spm.{0}.data)
     . = ALIGN(2);
+    __spm_{0}_secret_end = .;
   }} > REGION_DATA
 '''
 
@@ -120,6 +125,6 @@ if not out_file:
 
 info('Using output file ' + out_file)
 
-ld_args = ['-L', mcu_ldscripts_path, '-T', ldscript_name, '-o', out_file]
-ld_args += args.in_files
+ld_args += ['-L', mcu_ldscripts_path, '-T', ldscript_name, '-o', out_file]
+ld_args += args.in_files + ['-lspm-support']
 call_prog('msp430-gcc', ld_args)

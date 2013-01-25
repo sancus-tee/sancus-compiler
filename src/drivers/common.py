@@ -16,7 +16,7 @@ def get_data_path():
 
 def get_msp_paths():
   base = call_prog('msp430-gcc', ['-print-file-name=ldscripts'],
-                   get_output=True, silent=True)
+                   get_output=True)
   base = os.path.abspath(os.path.dirname(base + '/../../..'))
   info('Found MSP430 install directory: ' + base)
   include = base + '/include'
@@ -76,9 +76,9 @@ def cleanup():
   rm(*tmp_files)
   del tmp_files[:]
 
-def call_prog(prog, args=[], get_output=False, silent=False):
-  cmd = [prog] + args
-  if not silent:
+def call_prog(prog, arguments=[], get_output=False):
+  cmd = [prog] + arguments
+  if args.verbose:
     print ' '.join(cmd)
 
   try:
@@ -97,10 +97,6 @@ def call_prog(prog, args=[], get_output=False, silent=False):
 def fatal_error(msg):
   error(msg)
   sys.exit(1)
-
-#def info(msg):
-  #if args.verbose:
-    #print 'Info:', msg
 
 def positive_int(string):
   val = int(string)
