@@ -1,6 +1,7 @@
 #define DEBUG_TYPE "spm-creator"
 
 #include "SpmUtils.h"
+#include "AnnotationParser.h"
 
 #include <llvm/Pass.h>
 
@@ -12,11 +13,19 @@
 #include <llvm/Support/CallSite.h>
 #include <llvm/Support/InstIterator.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/Debug.h>
 
 using namespace llvm;
 
 namespace
 {
+
+struct SpmInfo
+{
+    std::string name;
+    bool isInSpm = false;
+    bool isEntry = false;
+};
 
 struct SpmCreator : ModulePass
 {
@@ -24,7 +33,9 @@ struct SpmCreator : ModulePass
 
     SpmCreator();
 
+    virtual void getAnalysisUsage(AnalysisUsage& au) const;
     virtual bool runOnModule(Module& m);
+
     void handleFunction(Function& f);
     void handleData(GlobalVariable& gv);
     void createEntryAndExit(Module& m);
@@ -33,6 +44,10 @@ struct SpmCreator : ModulePass
     unsigned getFunctionId(Function& f);
     Function* getStub(Function& f);
     bool isInSpm(const GlobalValue& f);
+    SpmInfo getSpmInfo(const GlobalValue* gv);
+
+    typedef std::map<const GlobalValue*, SpmInfo> InfoMap;
+    InfoMap spmInfo;
 
     typedef std::vector<Function*> EntryList;
     EntryList entries;
@@ -50,6 +65,11 @@ static RegisterPass<SpmCreator> SPM("create-spm", "Create SPM");
 
 SpmCreator::SpmCreator() : ModulePass(ID)
 {
+}
+
+void SpmCreator::getAnalysisUsage(AnalysisUsage& au) const
+{
+    au.addRequired<AnnotationParser>();
 }
 
 bool SpmCreator::runOnModule(Module& m)
@@ -269,4 +289,36 @@ bool SpmCreator::isInSpm(const GlobalValue& gv)
         return false;
 
     return true;
+}
+
+SpmInfo SpmCreator::getSpmInfo(const GlobalValue* gv)
+{
+    auto it = spmInfo.find(gv);
+    if (it != spmInfo.end())
+        return it->second;
+
+    AnnotationParser& ap = getAnalysis<AnnotationParser>();
+    SpmInfo info;
+    for (const Annotation& annot : ap.getAnnotations(gv))
+    {
+        auto pair = annot.value.split(':');
+        if (pair.second.empty())
+            continue;
+
+        SpmInfo info;
+        if (pair.first == "spm_entry")
+            info.isEntry = true;
+        else if (pair.first != "spm")
+            continue;
+
+        // found SPM annotation, check if it is the only one
+        if (info.isInSpm)
+            report_fatal_error("Multiple SPM annotations on " + gv->getName());
+
+        info.name = pair.second;
+        info.isInSpm = true;
+    }
+
+    spmInfo.insert({gv, info});
+    return info;
 }

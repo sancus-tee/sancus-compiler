@@ -4,6 +4,7 @@ include(LLVMConfig)
 set(SRC
     SpmCreator.cpp
     SpmUtils.cpp
+    AnnotationParser.cpp
 )
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})

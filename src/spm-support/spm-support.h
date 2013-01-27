@@ -30,4 +30,9 @@ inline void __attribute__((always_inline)) unprotect_spm()
     asm(".word 0x1380");
 }
 
+#define __ANNOTATE(x) __attribute__((annotate(x)))
+
+#define SPM_FUNC(name)  __ANNOTATE("spm:" name)
+#define SPM_ENTRY(name) __ANNOTATE("spm_entry:" name)
+
 #endif
