@@ -8,6 +8,12 @@
 
 using namespace llvm;
 
+raw_ostream& operator<<(raw_ostream& os, const Annotation& annot)
+{
+    return os << "Annotation(" << annot.value << ", " << annot.file << ", "
+              << annot.line << ")";
+}
+
 AnnotationParser::AnnotationParser() : ModulePass(ID)
 {
 }

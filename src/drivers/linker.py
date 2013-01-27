@@ -7,6 +7,18 @@ from elftools.elf.elffile import ELFFile
 
 from common import *
 
+def rename_syms_sects(file, sym_map, sect_map):
+  args = []
+  for old, new in sym_map.iteritems():
+    args += ['--redefine-sym', '{}={}'.format(old, new)]
+  for old, new in sect_map.iteritems():
+    args += ['--rename-section', '{}={}'.format(old, new)]
+
+  out_file = get_tmp()
+  args += [file, out_file]
+  call_prog('msp430-objcopy', args)
+  return out_file
+
 def parse_size(val):
   try:
     return int(val)
@@ -33,6 +45,8 @@ set_args(args)
 
 # find all defined SPMs
 spms = set()
+spms_table_order = {}
+spms_entries = {}
 
 for file_name in args.in_files:
   try:
@@ -42,6 +56,24 @@ for file_name in args.in_files:
         match = re.match(r'.spm.(\w+).', section.name)
         if match:
           spms.add(match.group(1))
+          continue
+
+        match = re.match(r'.rela.spm.(\w+).table', section.name)
+        if match:
+          spm_name = match.group(1)
+          if not spm_name in spms_table_order:
+            spms_table_order[spm_name] = []
+            spms_entries[spm_name] = []
+
+          spms_table_order[spm_name].append(file_name)
+
+          #find entry points of the SPM in this file
+          symtab = elf_file.get_section(section['sh_link'])
+          entries = [(rel['r_offset'], symtab.get_symbol(rel['r_info_sym']).name)
+                      for rel in section.iter_relocations()]
+          entries.sort()
+          spms_entries[spm_name] += [entry for _, entry in entries]
+          print spm_name, spms_entries[spm_name]
   except IOError as e:
     fatal_error(str(e))
 
@@ -55,12 +87,15 @@ text_section = '''.text.spm.{0} :
   {{
     . = ALIGN(2);
     __spm_{0}_public_start = .;
-    *(.spm.{0}.text.entry)
+    {1}
+    {2}
     *(.spm.{0}.text)
     . = ALIGN(2);
+    __spm_{0}_table = .;
+    {3}
+    . = ALIGN(2);
     __spm_{0}_public_end = .;
-  }} > REGION_TEXT
-'''
+  }} > REGION_TEXT'''
 
 data_section = '''.data.spm.{0} :
   {{
@@ -69,14 +104,41 @@ data_section = '''.data.spm.{0} :
     *(.spm.{0}.data)
     . = ALIGN(2);
     __spm_{0}_secret_end = .;
-  }} > REGION_DATA
-'''
+  }} > REGION_DATA'''
 
-text_sections = ''
-data_sections = ''
+text_sections = []
+data_sections = []
+symbols = []
 for spm in spms:
-  text_sections += text_section.format(spm)
-  data_sections += data_section.format(spm)
+  tables = []
+  for file in spms_table_order[spm]:
+    tables.append('{}(.spm.{}.table)'.format(file, spm))
+
+  nentries = '__spm_{}_nentries'.format(spm)
+  sym_map = {'__spm_entry'    : '__spm_{}_entry'.format(spm),
+             '__spm_nentries' : nentries,
+             '__spm_table'    : '__spm_{}_table'.format(spm),
+             '__spm_sp'       : '__spm_{}_sp'.format(spm),
+             '__ret_entry'    : '__spm_{}_ret_entry'.format(spm),
+             '__spm_exit'     : '__spm_{}_exit'.format(spm)}
+  sect_map = {'.spm.text' : '.spm.{}.text'.format(spm)}
+  
+  entry_file = rename_syms_sects(get_data_path() + '/entry.o', sym_map, sect_map)
+  exit_file = rename_syms_sects(get_data_path() + '/exit.o', sym_map, sect_map)
+  args.in_files += [entry_file, exit_file]
+
+  text_sections.append(text_section.format(spm, entry_file, exit_file,
+                                           '\n    '.join(tables)))
+  data_sections.append(data_section.format(spm))
+
+  symbols.append('{} = {};'.format(nentries, len(spms_entries[spm])))
+  for idx, entry in enumerate(spms_entries[spm]):
+    sym_name = '__spm_{}_entry_{}_idx'.format(spm, entry)
+    symbols.append('{} = {};'.format(sym_name, idx))
+
+text_sections = '\n  '.join(text_sections)
+data_sections = '\n  '.join(data_sections)
+symbols = '\n'.join(symbols)
 
 tmp_ldscripts_path = get_tmp_dir()
 template_path = get_data_path()
@@ -110,14 +172,15 @@ with open(template_path + '/msp430.x', 'r') as ldscript:
   template = string.Template(ldscript.read())
 
 contents = template.substitute(spm_text_sections=text_sections,
-                               spm_data_sections=data_sections)
+                               spm_data_sections=data_sections,
+                               spm_symbols=symbols)
 
 ldscript_name = tmp_ldscripts_path + '/msp430.x'
 with open(ldscript_name, 'w') as ldscript:
   ldscript.write(contents)
 
-#with open(ldscript_name, 'r') as ldscript:
-  #print ldscript.read()
+with open(ldscript_name, 'r') as ldscript:
+  print ldscript.read()
 
 out_file = args.out_file
 if not out_file:

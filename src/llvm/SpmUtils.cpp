@@ -77,22 +77,6 @@ std::string SpmUtils::getSpmExitName()
     return "__spm_exit";
 }
 
-std::string SpmUtils::getEntryAsmStub()
-{
-    std::stringstream asmStub;
-    asmStub << "\t.section " << getEntrySection() << ",\"ax\",@progbits\n"
-            << getContentsAsString(SPM_ENTRY_FILE);
-    return asmStub.str();
-}
-
-std::string SpmUtils::getExitAsmStub()
-{
-    std::stringstream asmStub;
-    asmStub << "\t.section " << getTextSection() << ",\"ax\",@progbits\n"
-            << getContentsAsString(SPM_EXIT_FILE);
-    return asmStub.str();
-}
-
 FunctionCcInfo SpmUtils::getFunctionCcInfo(Function* f)
 {
     FunctionCcInfo ret = {0, 0, 0, 0};
@@ -195,13 +179,4 @@ FunctionCcInfo SpmUtils::getFunctionCcInfo(Function* f)
 unsigned SpmUtils::getTypeSize(Type* type, const Module* m)
 {
     return DataLayout(m).getTypeStoreSize(type);
-}
-
-std::string SpmUtils::getContentsAsString(const char* fileName)
-{
-    std::ifstream file(fileName);
-    assert(file.is_open());
-    std::stringstream stream;
-    stream << file.rdbuf();
-    return stream.str();
 }

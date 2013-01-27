@@ -45,15 +45,12 @@ class SpmUtils
         static std::string getSpmSpName();
         static std::string getUnprotectedSpName();
         static std::string getSpmExitName();
-        static std::string getEntryAsmStub();
-        static std::string getExitAsmStub();
         static FunctionCcInfo getFunctionCcInfo(llvm::Function* f);
         static unsigned getStackSize();
 
     private:
 
         static unsigned getTypeSize(llvm::Type* type, const llvm::Module* m);
-        static std::string getContentsAsString(const char* fileName);
 };
 
 #endif

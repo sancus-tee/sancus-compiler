@@ -18,6 +18,8 @@ struct Annotation
     int line;
 };
 
+llvm::raw_ostream& operator<<(llvm::raw_ostream& os, const Annotation& annot);
+
 class AnnotationParser : public llvm::ModulePass
 {
     public:

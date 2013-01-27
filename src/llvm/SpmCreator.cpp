@@ -1,6 +1,7 @@
 #define DEBUG_TYPE "spm-creator"
 
 #include "SpmUtils.h"
+#include "SpmInfo.h"
 #include "AnnotationParser.h"
 
 #include <llvm/Pass.h>
@@ -20,13 +21,6 @@ using namespace llvm;
 namespace
 {
 
-struct SpmInfo
-{
-    std::string name;
-    bool isInSpm = false;
-    bool isEntry = false;
-};
-
 struct SpmCreator : ModulePass
 {
     static char ID;
@@ -38,11 +32,10 @@ struct SpmCreator : ModulePass
 
     void handleFunction(Function& f);
     void handleData(GlobalVariable& gv);
-    void createEntryAndExit(Module& m);
     void createFunctionTable(Module& m);
-    void createStack(Module& m);
+    void createStack(Module& m, const SpmInfo& info);
     unsigned getFunctionId(Function& f);
-    Function* getStub(Function& f);
+    Function* getStub(Function& caller, Function& callee);
     bool isInSpm(const GlobalValue& f);
     SpmInfo getSpmInfo(const GlobalValue* gv);
 
@@ -51,7 +44,7 @@ struct SpmCreator : ModulePass
 
     typedef std::vector<Function*> EntryList;
     EntryList entries;
-    typedef std::map<Function*, Function*> StubMap;
+    typedef std::map<std::pair<Function*, Function*>, Function*> StubMap;
     StubMap stubs;
 
     Type* wordTy;
@@ -85,33 +78,40 @@ bool SpmCreator::runOnModule(Module& m)
     for (Function& f : m.getFunctionList())
         handleFunction(f);
 
-    createEntryAndExit(m);
     createFunctionTable(m);
-    createStack(m);
 
     return true;
 }
 
 void SpmCreator::handleFunction(Function& f)
 {
-    if (!isInSpm(f) || f.isIntrinsic())
+    if (f.isIntrinsic())
         return;
 
-    StringRef origName = f.getName();
-    f.setName(SpmUtils::getStubName(origName));
-    f.setLinkage(Function::InternalLinkage);
-    f.setSection(SpmUtils::getTextSection());
+    SpmInfo info = getSpmInfo(&f);
+    if (info.isInSpm)
+    {
+        f.setSection(info.getTextSection());
+        createStack(*f.getParent(), info);
+    }
+    if (info.isEntry)
+        entries.push_back(&f);
 
-    std::string asmStub = Twine("\t.global " + origName + "\n"
-                                "\t.text\n"
-                                "\t.align 2\n" +
-                                origName + ":\n"
-                                "\tpush r6\n"
-                                "\tmov #" + Twine(getFunctionId(f)) + ", r6\n"
-                                "\tbr #__spm_entry\n\n"
-                               ).str();
-
-    f.getParent()->appendModuleInlineAsm(asmStub);
+//     StringRef origName = f.getName();
+//     f.setName(SpmUtils::getStubName(origName));
+//     f.setLinkage(Function::InternalLinkage);
+//     f.setSection(SpmUtils::getTextSection());
+// 
+//     std::string asmStub = Twine("\t.global " + origName + "\n"
+//                                 "\t.text\n"
+//                                 "\t.align 2\n" +
+//                                 origName + ":\n"
+//                                 "\tpush r6\n"
+//                                 "\tmov #" + Twine(getFunctionId(f)) + ", r6\n"
+//                                 "\tbr #__spm_entry\n\n"
+//                                ).str();
+// 
+//     f.getParent()->appendModuleInlineAsm(asmStub);
 
     for (inst_iterator it = inst_begin(f), end = inst_end(f); it != end; ++it)
     {
@@ -122,26 +122,17 @@ void SpmCreator::handleFunction(Function& f)
         Function* callee = cs.getCalledFunction();
         assert(callee != nullptr && "Function pointers not supported yet");
 
-        if (isInSpm(*callee) || callee->isIntrinsic())
-            continue;
-
-        cs.setCalledFunction(getStub(*callee));
+        cs.setCalledFunction(getStub(f, *callee));
     }
 }
 
 void SpmCreator::handleData(GlobalVariable& gv)
 {
-    if (!isInSpm(gv))
+    SpmInfo info = getSpmInfo(&gv);
+    if (!info.isInSpm)
         return;
 
-    gv.setLinkage(GlobalVariable::InternalLinkage);
-    gv.setSection(SpmUtils::getDataSection());
-}
-
-void SpmCreator::createEntryAndExit(Module& m)
-{
-    m.appendModuleInlineAsm(SpmUtils::getEntryAsmStub());
-    m.appendModuleInlineAsm(SpmUtils::getExitAsmStub());
+    gv.setSection(info.getDataSection());
 }
 
 void SpmCreator::createFunctionTable(Module& m)
@@ -157,47 +148,49 @@ void SpmCreator::createFunctionTable(Module& m)
     StructType* funcInfoTy = StructType::get(m.getContext(), funcInfoFields,
                                              /*isPacked=*/true);
 
-    // struct SpmFunctionTable
-    // {
-    //     unsigned num_funcs;
-    //     struct SpmFunctionInfo funcs[];
-    // };
-    ArrayType* funcsTy = ArrayType::get(funcInfoTy, entries.size());
-    Type* funcTableFields[] = {wordTy, funcsTy};
-    StructType* tableTy = StructType::get(m.getContext(), funcTableFields,
-                                          /*isPacked=*/true);
-
-    // create a global spm function table and initialize it
-    // initializer for the funcs[] array
-    std::vector<Constant*> funcsEls;
+    // create a global spm function table for every spm and initialize it
+    // initializers for the funcs[] array. map from section name to initializer
+    std::map<std::string, std::vector<Constant*>> funcsEls;
     for (Function* f : entries)
     {
+        SpmInfo info = getSpmInfo(f);
+        assert(info.isEntry && "Asking function table for non-entry");
+
         // initializer for the SpmFunctionInfo struct
         FunctionCcInfo ccInfo = SpmUtils::getFunctionCcInfo(f);
+        if (ccInfo.argsLength != 0 || ccInfo.retLength != 0)
+        {
+            errs() << "Warning: Passing arguments on the stack between SPMs "
+                      "will not work";
+        }
+
         Constant* funcFields[] = {ConstantExpr::getBitCast(f, voidPtrTy),
                                   ConstantInt::get(wordTy, ccInfo.argsLength),
                                   ConstantInt::get(wordTy, ccInfo.retRegsUsage)};
-        funcsEls.push_back(ConstantStruct::get(funcInfoTy, funcFields));
+        funcsEls[info.getTableSection()]
+            .push_back(ConstantStruct::get(funcInfoTy, funcFields));
     }
 
-    Constant* funcsInit = ConstantArray::get(funcsTy, funcsEls);
+    for (const auto& it : funcsEls)
+    {
+        // struct SpmFunctionInfo funcs[];
+        ArrayType* funcsTy = ArrayType::get(funcInfoTy, it.second.size());
+        Constant* funcsInit = ConstantArray::get(funcsTy, it.second);
 
-    // initializer for the function table
-    Constant* funcTableEls[] = {ConstantInt::get(wordTy, entries.size()),
-                                funcsInit};
-    Constant* funcTableInit = ConstantStruct::get(tableTy, funcTableEls);
-
-    GlobalVariable* table =
-        new GlobalVariable(m, tableTy, /*isConstant=*/true,
-                           GlobalVariable::InternalLinkage, funcTableInit,
-                           SpmUtils::getFunctionTableName());
-    table->setSection(SpmUtils::getDataSection());
-    table->setAlignment(2);
+        GlobalVariable* table =
+            new GlobalVariable(m, funcsTy, /*isConstant=*/true,
+                               GlobalVariable::InternalLinkage, funcsInit);
+        table->setSection(it.first);
+        table->setAlignment(2);
+    }
 }
 
-void SpmCreator::createStack(Module& m)
+void SpmCreator::createStack(Module& m, const SpmInfo& info)
 {
     using namespace llvm::types;
+
+    if (m.getGlobalVariable(info.getStackName()) != nullptr)
+        return;
 
     LLVMContext& ctx = m.getContext();
     unsigned stackSize = SpmUtils::getStackSize();
@@ -206,27 +199,20 @@ void SpmCreator::createStack(Module& m)
                                    stackSize);
     Constant* stackInit = ConstantAggregateZero::get(stackTy);
     GlobalVariable* stack = new GlobalVariable(m, stackTy, /*isConstant=*/false,
-                                               GlobalVariable::InternalLinkage,
+                                               GlobalVariable::WeakAnyLinkage,
                                                stackInit,
-                                               SpmUtils::getStackName());
-    stack->setSection(SpmUtils::getDataSection());
+                                               info.getStackName());
+    stack->setSection(info.getDataSection());
 
     Constant* gepIdx[] = {ConstantInt::get(wordTy, 0),
                           ConstantInt::get(wordTy, stackSize)};
     Constant* spmSpInit = ConstantExpr::getGetElementPtr(stack, gepIdx);
     GlobalVariable* spmSp = new GlobalVariable(m, voidPtrTy,
                                                /*isConstant=*/false,
-                                               GlobalVariable::InternalLinkage,
+                                               GlobalVariable::WeakAnyLinkage,
                                                spmSpInit,
-                                               SpmUtils::getSpmSpName());
-    spmSp->setSection(SpmUtils::getDataSection());
-
-    Constant* unprotectedSpInit = ConstantPointerNull::get(voidPtrTy);
-    GlobalVariable* unprotectedSp =
-        new GlobalVariable(m, voidPtrTy, /*isConstant=*/false,
-                           GlobalVariable::InternalLinkage, unprotectedSpInit,
-                           SpmUtils::getUnprotectedSpName());
-    unprotectedSp->setSection(SpmUtils::getDataSection());
+                                               info.getSpName());
+    spmSp->setSection(info.getDataSection());
 }
 
 unsigned int SpmCreator::getFunctionId(Function& f)
@@ -242,42 +228,93 @@ unsigned int SpmCreator::getFunctionId(Function& f)
         return it - entries.begin();
 }
 
-Function* SpmCreator::getStub(Function& f)
+Function* SpmCreator::getStub(Function& caller, Function& callee)
 {
-    assert(!isInSpm(f) && "Asking for stub of SPM function");
+    Module* m = caller.getParent();
 
-    StubMap::iterator it = stubs.find(&f);
+    auto pair = std::make_pair(&caller, &callee);
+    StubMap::iterator it = stubs.find(pair);
     if (it != stubs.end())
         return it->second;
 
-    StringRef origName = f.getName();
-    std::string stubName = SpmUtils::getStubName(origName);
-    Module* m = f.getParent();
-    Function* stubDecl = Function::Create(f.getFunctionType(),
-                                          Function::ExternalLinkage,
-                                          stubName, m);
+    Function* stub = nullptr;
+    std::string stubAsm;
 
-    FunctionCcInfo ccInfo = SpmUtils::getFunctionCcInfo(&f);
+    SpmInfo callerInfo = getSpmInfo(&caller);
+    SpmInfo calleeInfo = getSpmInfo(&callee);
 
-    std::string stub = Twine("\t.align 2\n"
-                             "\t.section " + SpmUtils::getTextSection() +
-                                ",\"ax\",@progbits\n" +
-                             stubName + ":\n"
-                             "\tpush r7\n"
-                             "\tpush r8\n"
-                             "\tpush r9\n"
-                             "\tpush r10\n"
-                             "\tmov #" + Twine(ccInfo.argsLength) + ", r7\n"
-                             "\tmov #" + origName + ", r8\n"
-                             "\tmov #" + Twine(ccInfo.argRegsUsage) + ", r9\n"
-                             "\tmov #" + Twine(ccInfo.retLength) + ", r10\n"
-                             "\tbr #" + SpmUtils::getSpmExitName() + "\n\n"
-                            ).str();
+    if (callerInfo.name == calleeInfo.name) // call within SPM/unprotected
+        stub = &callee;
+    else if (callerInfo.name.empty()) // call unprotected -> SPM
+    {
+        assert(calleeInfo.isEntry && "Calling non-entry function");
+        std::string sectionName = callerInfo.getTextSection();
+        std::string stubName = callerInfo.getCalleeStubName(callee.getName());
+        std::string idxName = calleeInfo.getIndexName(callee.getName());
+        std::string brName = calleeInfo.getEntryName();
 
-    m->appendModuleInlineAsm(stub);
+        stubAsm = Twine("\t.align 2\n"
+                        "\t.section " + sectionName + ",\"ax\",@progbits\n"
+                        "\t.weak " + stubName + + "\n" +
+                        stubName + ":\n"
+                        "\tpush r6\n"
+                        "\tpush r7\n"
+                        "\tmov #" + idxName + ", r6\n"
+                        "\tmov #1f, r7\n"
+                        "\tmov r1, &__unprotected_sp\n"
+                        "\tbr #" + brName + "\n"
+                        "1:\n"
+                        "\tmov &__unprotected_sp, r1\n"
+                        "\tpop r7\n"
+                        "\tpop r6\n"
+                        "\tret"
+                       ).str();
 
-    stubs[&f] = stubDecl;
-    return stubDecl;
+        stub = Function::Create(callee.getFunctionType(),
+                                Function::ExternalLinkage, stubName, m);
+    }
+    else // call SPM -> SPM/unprotected
+    {
+        FunctionCcInfo ccInfo = SpmUtils::getFunctionCcInfo(&callee);
+        std::string sectionName = callerInfo.getTextSection();
+        std::string stubName = callerInfo.getCalleeStubName(callee.getName());
+        Twine regsUsage = Twine(ccInfo.argRegsUsage);
+        std::string brName = callerInfo.getExitName();
+
+        std::string idxName, entryName;
+        if (!calleeInfo.name.empty()) // call to SPM
+        {
+            idxName = calleeInfo.getIndexName(callee.getName());
+            entryName = calleeInfo.getEntryName();
+        }
+        else
+        {
+            idxName = callee.getName();
+            entryName = "__unprotected_entry";
+        }
+
+        stubAsm = Twine("\t.align 2\n"
+                        "\t.section " + sectionName + ",\"ax\",@progbits\n"
+                        "\t.weak " + stubName + + "\n" +
+                        stubName + ":\n"
+                        "\tpush r6\n"
+                        "\tpush r7\n"
+                        "\tpush r8\n"
+                        "\tmov #" + idxName + ", r6\n"
+                        "\tmov #" + regsUsage + ", r7\n"
+                        "\tmov #" + entryName + ", r8\n"
+                        "\tbr #" + brName + "\n"
+                       ).str();
+
+        stub = Function::Create(callee.getFunctionType(),
+                                Function::ExternalLinkage, stubName, m);
+    }
+
+    if (!stubAsm.empty())
+        m->appendModuleInlineAsm(stubAsm);
+
+    stubs[pair] = stub;
+    return stub;
 }
 
 bool SpmCreator::isInSpm(const GlobalValue& gv)
@@ -305,7 +342,6 @@ SpmInfo SpmCreator::getSpmInfo(const GlobalValue* gv)
         if (pair.second.empty())
             continue;
 
-        SpmInfo info;
         if (pair.first == "spm_entry")
             info.isEntry = true;
         else if (pair.first != "spm")

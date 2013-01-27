@@ -95,6 +95,8 @@ SECTIONS
     *(.bss .bss.*)
     *(COMMON)
      . = ALIGN(2);
+     __unprotected_sp = .;
+     . += 2;
      PROVIDE (__bss_end = .) ;
   }  > REGION_DATA
    PROVIDE (__bss_size = SIZEOF(.bss) );
@@ -186,3 +188,5 @@ SECTIONS
    PROVIDE (__data_start_rom = _etext);
    PROVIDE (__data_end_rom   = _etext + SIZEOF (.data));
 }
+
+$spm_symbols
