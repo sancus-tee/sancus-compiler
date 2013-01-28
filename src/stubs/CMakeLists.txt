@@ -1,4 +1,4 @@
-find_package(MSPGCC)
+find_package(MSPGCC REQUIRED)
 include(UseMSPGCC)
 include(AddObject)
 
