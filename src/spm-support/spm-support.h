@@ -34,5 +34,6 @@ inline void __attribute__((always_inline)) unprotect_spm()
 
 #define SPM_FUNC(name)  __ANNOTATE("spm:" name)
 #define SPM_ENTRY(name) __ANNOTATE("spm_entry:" name)
+#define SPM_DATA(name)  SPM_FUNC(name)
 
 #endif

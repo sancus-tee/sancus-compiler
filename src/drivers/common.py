@@ -60,8 +60,8 @@ def rm(*files):
 
 tmp_files = []
 
-def get_tmp():
-  tmp = tempfile.mkstemp()[1]
+def get_tmp(suffix = ''):
+  tmp = tempfile.mkstemp(suffix)[1]
   tmp_files.append(tmp)
   return tmp
 
@@ -70,7 +70,7 @@ def get_tmp_dir():
   tmp_files.append(tmp)
   return tmp
 
-#@atexit.register
+@atexit.register
 def cleanup():
   info('Cleaning up temporary files: ' + ', '.join(tmp_files))
   rm(*tmp_files)

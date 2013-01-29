@@ -1,6 +1,6 @@
 #define DEBUG_TYPE "spm-creator"
 
-#include "SpmUtils.h"
+#include "FunctionCcInfo.h"
 #include "SpmInfo.h"
 #include "AnnotationParser.h"
 
@@ -30,25 +30,20 @@ struct SpmCreator : ModulePass
     virtual void getAnalysisUsage(AnalysisUsage& au) const;
     virtual bool runOnModule(Module& m);
 
-    void handleFunction(Function& f);
-    void handleData(GlobalVariable& gv);
+    bool handleFunction(Function& f);
+    bool handleData(GlobalVariable& gv);
     void createFunctionTable(Module& m);
-    void createStack(Module& m, const SpmInfo& info);
-    unsigned getFunctionId(Function& f);
     Function* getStub(Function& caller, Function& callee);
-    bool isInSpm(const GlobalValue& f);
     SpmInfo getSpmInfo(const GlobalValue* gv);
+    Function* getCalledFunction(CallSite cs);
 
     typedef std::map<const GlobalValue*, SpmInfo> InfoMap;
     InfoMap spmInfo;
 
     typedef std::vector<Function*> EntryList;
     EntryList entries;
-    typedef std::map<std::pair<Function*, Function*>, Function*> StubMap;
+    typedef std::map<std::pair<std::string, Function*>, Function*> StubMap;
     StubMap stubs;
-
-    Type* wordTy;
-    PointerType* voidPtrTy;
 };
 
 }
@@ -67,51 +62,33 @@ void SpmCreator::getAnalysisUsage(AnalysisUsage& au) const
 
 bool SpmCreator::runOnModule(Module& m)
 {
-    using namespace llvm::types;
-
-    LLVMContext& ctx = m.getContext();
-    wordTy = TypeBuilder<i<16>, true>::get(ctx);
-    voidPtrTy = TypeBuilder<i<8>*, true>::get(ctx);
+    bool modified = false;
 
     for (GlobalVariable& gv : m.getGlobalList())
-        handleData(gv);
+        modified |= handleData(gv);
     for (Function& f : m.getFunctionList())
-        handleFunction(f);
+        modified |= handleFunction(f);
 
     createFunctionTable(m);
 
-    return true;
+    return modified;
 }
 
-void SpmCreator::handleFunction(Function& f)
+bool SpmCreator::handleFunction(Function& f)
 {
-    if (f.isIntrinsic())
-        return;
+    if (f.isIntrinsic() || f.isDeclaration())
+        return false;
+
+    bool modified = false;
 
     SpmInfo info = getSpmInfo(&f);
     if (info.isInSpm)
     {
         f.setSection(info.getTextSection());
-        createStack(*f.getParent(), info);
+        modified = true;
     }
     if (info.isEntry)
         entries.push_back(&f);
-
-//     StringRef origName = f.getName();
-//     f.setName(SpmUtils::getStubName(origName));
-//     f.setLinkage(Function::InternalLinkage);
-//     f.setSection(SpmUtils::getTextSection());
-// 
-//     std::string asmStub = Twine("\t.global " + origName + "\n"
-//                                 "\t.text\n"
-//                                 "\t.align 2\n" +
-//                                 origName + ":\n"
-//                                 "\tpush r6\n"
-//                                 "\tmov #" + Twine(getFunctionId(f)) + ", r6\n"
-//                                 "\tbr #__spm_entry\n\n"
-//                                ).str();
-// 
-//     f.getParent()->appendModuleInlineAsm(asmStub);
 
     for (inst_iterator it = inst_begin(f), end = inst_end(f); it != end; ++it)
     {
@@ -119,24 +96,50 @@ void SpmCreator::handleFunction(Function& f)
         if (!cs)
             continue;
 
-        Function* callee = cs.getCalledFunction();
-        assert(callee != nullptr && "Function pointers not supported yet");
+        Function* callee = getCalledFunction(cs);
+        if (callee == nullptr)
+        {
+            if (CallInst* ci = cast<CallInst>(&*it))
+            {
+                if (ci->isInlineAsm())
+                    continue;
+            }
 
-        cs.setCalledFunction(getStub(f, *callee));
+            report_fatal_error("In function " + f.getName() +
+                               ": Function pointers not supported yet");
+        }
+        else if (callee->isIntrinsic())
+            continue;
+
+        Function* stub = getStub(f, *callee);
+        cs.setCalledFunction(stub);
+
+        if (stub != callee)
+            modified = true;
     }
+
+    return modified;
 }
 
-void SpmCreator::handleData(GlobalVariable& gv)
+bool SpmCreator::handleData(GlobalVariable& gv)
 {
     SpmInfo info = getSpmInfo(&gv);
     if (!info.isInSpm)
-        return;
+        return false;
+
+    if (gv.hasCommonLinkage())
+        gv.setLinkage(GlobalValue::WeakAnyLinkage);
 
     gv.setSection(info.getDataSection());
+    return true;
 }
 
 void SpmCreator::createFunctionTable(Module& m)
 {
+    LLVMContext& ctx = m.getContext();
+    Type* wordTy = TypeBuilder<types::i<16>, true>::get(ctx);
+    Type* voidPtrTy = TypeBuilder<types::i<8>*, true>::get(ctx);
+
     // struct SpmFunctionInfo
     // {
     //     void* address;
@@ -145,11 +148,12 @@ void SpmCreator::createFunctionTable(Module& m)
     // };
     Type* funcInfoFields[] = {voidPtrTy, wordTy, wordTy};
 
-    StructType* funcInfoTy = StructType::get(m.getContext(), funcInfoFields,
+    StructType* funcInfoTy = StructType::get(ctx, funcInfoFields,
                                              /*isPacked=*/true);
 
     // create a global spm function table for every spm and initialize it
-    // initializers for the funcs[] array. map from section name to initializer
+    // initializers for the funcs[] array.
+    // map from section name to initializer
     std::map<std::string, std::vector<Constant*>> funcsEls;
     for (Function* f : entries)
     {
@@ -157,7 +161,7 @@ void SpmCreator::createFunctionTable(Module& m)
         assert(info.isEntry && "Asking function table for non-entry");
 
         // initializer for the SpmFunctionInfo struct
-        FunctionCcInfo ccInfo = SpmUtils::getFunctionCcInfo(f);
+        FunctionCcInfo ccInfo(f);
         if (ccInfo.argsLength != 0 || ccInfo.retLength != 0)
         {
             errs() << "Warning: Passing arguments on the stack between SPMs "
@@ -185,54 +189,13 @@ void SpmCreator::createFunctionTable(Module& m)
     }
 }
 
-void SpmCreator::createStack(Module& m, const SpmInfo& info)
-{
-    using namespace llvm::types;
-
-    if (m.getGlobalVariable(info.getStackName()) != nullptr)
-        return;
-
-    LLVMContext& ctx = m.getContext();
-    unsigned stackSize = SpmUtils::getStackSize();
-
-    Type* stackTy = ArrayType::get(TypeBuilder<i<8>, true>::get(ctx),
-                                   stackSize);
-    Constant* stackInit = ConstantAggregateZero::get(stackTy);
-    GlobalVariable* stack = new GlobalVariable(m, stackTy, /*isConstant=*/false,
-                                               GlobalVariable::WeakAnyLinkage,
-                                               stackInit,
-                                               info.getStackName());
-    stack->setSection(info.getDataSection());
-
-    Constant* gepIdx[] = {ConstantInt::get(wordTy, 0),
-                          ConstantInt::get(wordTy, stackSize)};
-    Constant* spmSpInit = ConstantExpr::getGetElementPtr(stack, gepIdx);
-    GlobalVariable* spmSp = new GlobalVariable(m, voidPtrTy,
-                                               /*isConstant=*/false,
-                                               GlobalVariable::WeakAnyLinkage,
-                                               spmSpInit,
-                                               info.getSpName());
-    spmSp->setSection(info.getDataSection());
-}
-
-unsigned int SpmCreator::getFunctionId(Function& f)
-{
-    EntryList::iterator it = std::find(entries.begin(), entries.end(), &f);
-
-    if (it == entries.end())
-    {
-        entries.push_back(&f);
-        return entries.size() - 1;
-    }
-    else
-        return it - entries.begin();
-}
-
 Function* SpmCreator::getStub(Function& caller, Function& callee)
 {
     Module* m = caller.getParent();
+    SpmInfo callerInfo = getSpmInfo(&caller);
+    SpmInfo calleeInfo = getSpmInfo(&callee);
 
-    auto pair = std::make_pair(&caller, &callee);
+    auto pair = std::make_pair(callerInfo.name, &callee);
     StubMap::iterator it = stubs.find(pair);
     if (it != stubs.end())
         return it->second;
@@ -240,14 +203,18 @@ Function* SpmCreator::getStub(Function& caller, Function& callee)
     Function* stub = nullptr;
     std::string stubAsm;
 
-    SpmInfo callerInfo = getSpmInfo(&caller);
-    SpmInfo calleeInfo = getSpmInfo(&callee);
-
     if (callerInfo.name == calleeInfo.name) // call within SPM/unprotected
         stub = &callee;
     else if (callerInfo.name.empty()) // call unprotected -> SPM
     {
-        assert(calleeInfo.isEntry && "Calling non-entry function");
+        if (!calleeInfo.isEntry)
+        {
+            report_fatal_error("In function " + caller.getName() +
+                               ": Calling non-entry function " +
+                               callee.getName() + " of SPM " +
+                               callerInfo.name);
+        }
+
         std::string sectionName = callerInfo.getTextSection();
         std::string stubName = callerInfo.getCalleeStubName(callee.getName());
         std::string idxName = calleeInfo.getIndexName(callee.getName());
@@ -275,7 +242,7 @@ Function* SpmCreator::getStub(Function& caller, Function& callee)
     }
     else // call SPM -> SPM/unprotected
     {
-        FunctionCcInfo ccInfo = SpmUtils::getFunctionCcInfo(&callee);
+        FunctionCcInfo ccInfo(&callee);
         std::string sectionName = callerInfo.getTextSection();
         std::string stubName = callerInfo.getCalleeStubName(callee.getName());
         Twine regsUsage = Twine(ccInfo.argRegsUsage);
@@ -317,17 +284,6 @@ Function* SpmCreator::getStub(Function& caller, Function& callee)
     return stub;
 }
 
-bool SpmCreator::isInSpm(const GlobalValue& gv)
-{
-    if (gv.isDeclaration())
-        return false;
-
-    if (gv.hasUnnamedAddr())
-        return false;
-
-    return true;
-}
-
 SpmInfo SpmCreator::getSpmInfo(const GlobalValue* gv)
 {
     auto it = spmInfo.find(gv);
@@ -357,4 +313,23 @@ SpmInfo SpmCreator::getSpmInfo(const GlobalValue* gv)
 
     spmInfo.insert({gv, info});
     return info;
+}
+
+Function* SpmCreator::getCalledFunction(CallSite cs)
+{
+    assert(cs && "Not a call site");
+
+    if (Function* f = cs.getCalledFunction())
+        return f;
+
+    if (ConstantExpr* ce = dyn_cast<ConstantExpr>(cs.getCalledValue()))
+    {
+        if (ce->isCast())
+        {
+            if (Function* f = dyn_cast<Function>(ce->getOperand(0)))
+                return f;
+        }
+    }
+
+    return nullptr;
 }

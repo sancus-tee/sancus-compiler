@@ -1,7 +1,0 @@
-#ifndef CONFIG_H
-#define CONFIG_H
-
-#define SPM_ENTRY_FILE "@FULL_INSTALL_DATA_PATH@/entry.s"
-#define SPM_EXIT_FILE  "@FULL_INSTALL_DATA_PATH@/exit.s"
-
-#endif

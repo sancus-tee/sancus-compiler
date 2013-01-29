@@ -1,8 +1,6 @@
 #define DEBUG_TYPE "spm-creator"
 
-#include "Config.h"
-
-#include "SpmUtils.h"
+#include "FunctionCcInfo.h"
 
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -10,76 +8,10 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/raw_ostream.h>
-
-#include <fstream>
-#include <sstream>
-
 using namespace llvm;
 
-static cl::opt<std::string> SpmId("spm-id",
-                                  cl::desc("ID for the SPM"),
-                                  cl::Required);
-
-static cl::opt<unsigned> StackSize("spm-stack-size",
-                                   cl::desc("Stack size for the SPM"),
-                                   cl::Optional,
-                                   cl::init(256));
-
-std::string SpmUtils::getTextSection()
+FunctionCcInfo::FunctionCcInfo(Function* f)
 {
-    return ".spm." + SpmId + ".text";
-}
-
-std::string SpmUtils::getEntrySection()
-{
-    return ".spm." + SpmId + ".text.entry";
-}
-
-std::string SpmUtils::getDataSection()
-{
-    return ".spm." + SpmId + ".data";
-}
-
-std::string SpmUtils::getStubName(const std::string& origName)
-{
-    return "__spm_" + SpmId + "_" + origName;
-}
-
-std::string SpmUtils::getFunctionTableName()
-{
-    return "__spm_table";
-}
-
-std::string SpmUtils::getStackName()
-{
-    return "__spm_stack";
-}
-
-unsigned SpmUtils::getStackSize()
-{
-    return StackSize;
-}
-
-std::string SpmUtils::getSpmSpName()
-{
-    return "__spm_sp";
-}
-
-std::string SpmUtils::getUnprotectedSpName()
-{
-    return "__unprotected_sp";
-}
-
-std::string SpmUtils::getSpmExitName()
-{
-    return "__spm_exit";
-}
-
-FunctionCcInfo SpmUtils::getFunctionCcInfo(Function* f)
-{
-    FunctionCcInfo ret = {0, 0, 0, 0};
     Module* m = f->getParent();
 
     unsigned argRegsLeft = 4;
@@ -91,7 +23,7 @@ FunctionCcInfo SpmUtils::getFunctionCcInfo(Function* f)
         if (arg.hasStructRetAttr())
         {
             assert(argRegsLeft == 4 && "sret not first argument?");
-            ret.retLength =
+            retLength =
                 getTypeSize(cast<PointerType>(argTy)->getElementType(), m);
             argRegsLeft--;
             continue;
@@ -109,7 +41,7 @@ FunctionCcInfo SpmUtils::getFunctionCcInfo(Function* f)
 
         if (argRegsLeft == 0 || argTy->isStructTy())
         {
-            ret.argsLength += argSize;
+            argsLength += argSize;
             continue;
         }
 
@@ -120,29 +52,29 @@ FunctionCcInfo SpmUtils::getFunctionCcInfo(Function* f)
         if (2 * argRegsLeft >= argSize)
             argRegsLeft -= argSize / 2;
         else
-            ret.argsLength += argSize;
+            argsLength += argSize;
     }
 
     switch (argRegsLeft)
     {
         case 0:
-            ret.argRegsUsage = 0x1;
+            argRegsUsage = 0x1;
             break;
 
         case 1:
-            ret.argRegsUsage = 0x2;
+            argRegsUsage = 0x2;
             break;
 
         case 2:
-            ret.argRegsUsage = 0x4;
+            argRegsUsage = 0x4;
             break;
 
         case 3:
-            ret.argRegsUsage = 0x8;
+            argRegsUsage = 0x8;
             break;
 
         case 4:
-            ret.argRegsUsage = 0x0;
+            argRegsUsage = 0x0;
             break;
 
         default:
@@ -156,27 +88,25 @@ FunctionCcInfo SpmUtils::getFunctionCcInfo(Function* f)
         switch (getTypeSize(retTy, m))
         {
             case 8:
-                ret.retRegsUsage = 0x1;
+                retRegsUsage = 0x1;
                 break;
 
             case 4:
-                ret.retRegsUsage = 0x2;
+                retRegsUsage = 0x2;
                 break;
 
             case 2:
             case 1:
-                ret.retRegsUsage = 0x4;
+                retRegsUsage = 0x4;
                 break;
 
             default:
                 llvm_unreachable("Invalid return type size");
         }
     }
-
-    return ret;
 }
 
-unsigned SpmUtils::getTypeSize(Type* type, const Module* m)
+unsigned int FunctionCcInfo::getTypeSize(Type* type, const Module* m)
 {
     return DataLayout(m).getTypeStoreSize(type);
 }

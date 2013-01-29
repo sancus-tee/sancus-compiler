@@ -14,7 +14,7 @@ def rename_syms_sects(file, sym_map, sect_map):
   for old, new in sect_map.iteritems():
     args += ['--rename-section', '{}={}'.format(old, new)]
 
-  out_file = get_tmp()
+  out_file = get_tmp('.o')
   args += [file, out_file]
   call_prog('msp430-objcopy', args)
   return out_file
@@ -39,6 +39,11 @@ parser.add_argument('--rom-size',
                              '32K', '41K', '48K', '51K', '54K', '55K'],
                     default='2K')
 parser.add_argument('-rdynamic', action='store_true')
+parser.add_argument('--spm-stack-size',
+                    help='Stack size for the SPM (in bytes)',
+                    type=positive_int,
+                    default=256,
+                    metavar='size')
 
 args, ld_args = parser.parse_known_args()
 set_args(args)
@@ -73,12 +78,13 @@ for file_name in args.in_files:
                       for rel in section.iter_relocations()]
           entries.sort()
           spms_entries[spm_name] += [entry for _, entry in entries]
-          print spm_name, spms_entries[spm_name]
   except IOError as e:
     fatal_error(str(e))
 
 if len(spms) > 0:
-  info('Found SPMs: ' + ', '.join(spms))
+  info('Found SPMs:')
+  for spm in spms:
+    info(' - {} with entries: {}'.format(spm, ', '.join(spms_entries[spm])))
 else:
   info('No SPMs found')
 
@@ -102,6 +108,10 @@ data_section = '''.data.spm.{0} :
     . = ALIGN(2);
     __spm_{0}_secret_start = .;
     *(.spm.{0}.data)
+    . += {1};
+    __spm_{0}_stack_init = .;
+    __spm_{0}_sp = .;
+    . += 2;
     . = ALIGN(2);
     __spm_{0}_secret_end = .;
   }} > REGION_DATA'''
@@ -115,21 +125,22 @@ for spm in spms:
     tables.append('{}(.spm.{}.table)'.format(file, spm))
 
   nentries = '__spm_{}_nentries'.format(spm)
-  sym_map = {'__spm_entry'    : '__spm_{}_entry'.format(spm),
-             '__spm_nentries' : nentries,
-             '__spm_table'    : '__spm_{}_table'.format(spm),
-             '__spm_sp'       : '__spm_{}_sp'.format(spm),
-             '__ret_entry'    : '__spm_{}_ret_entry'.format(spm),
-             '__spm_exit'     : '__spm_{}_exit'.format(spm)}
+  sym_map = {'__spm_entry'      : '__spm_{}_entry'.format(spm),
+             '__spm_nentries'   : nentries,
+             '__spm_table'      : '__spm_{}_table'.format(spm),
+             '__spm_sp'         : '__spm_{}_sp'.format(spm),
+             '__ret_entry'      : '__spm_{}_ret_entry'.format(spm),
+             '__spm_exit'       : '__spm_{}_exit'.format(spm),
+             '__spm_stack_init' : '__spm_{}_stack_init'.format(spm)}
   sect_map = {'.spm.text' : '.spm.{}.text'.format(spm)}
   
-  entry_file = rename_syms_sects(get_data_path() + '/entry.o', sym_map, sect_map)
-  exit_file = rename_syms_sects(get_data_path() + '/exit.o', sym_map, sect_map)
+  entry_file = rename_syms_sects(get_data_path() + '/spm_entry.o', sym_map, sect_map)
+  exit_file = rename_syms_sects(get_data_path() + '/spm_exit.o', sym_map, sect_map)
   args.in_files += [entry_file, exit_file]
 
   text_sections.append(text_section.format(spm, entry_file, exit_file,
                                            '\n    '.join(tables)))
-  data_sections.append(data_section.format(spm))
+  data_sections.append(data_section.format(spm, args.spm_stack_size))
 
   symbols.append('{} = {};'.format(nentries, len(spms_entries[spm])))
   for idx, entry in enumerate(spms_entries[spm]):
@@ -179,8 +190,8 @@ ldscript_name = tmp_ldscripts_path + '/msp430.x'
 with open(ldscript_name, 'w') as ldscript:
   ldscript.write(contents)
 
-with open(ldscript_name, 'r') as ldscript:
-  print ldscript.read()
+#with open(ldscript_name, 'r') as ldscript:
+  #print ldscript.read()
 
 out_file = args.out_file
 if not out_file:
@@ -189,5 +200,5 @@ if not out_file:
 info('Using output file ' + out_file)
 
 ld_args += ['-L', mcu_ldscripts_path, '-T', ldscript_name, '-o', out_file]
-ld_args += args.in_files + ['-lspm-support']
+ld_args += args.in_files + [get_data_path() + '/unprotected_entry.o', '-lspm-support']
 call_prog('msp430-gcc', ld_args)

@@ -44,10 +44,10 @@ bool AnnotationParser::runOnModule(llvm::Module& m)
 
         annotations.insert({key, annotation});
 
-        dbgs() << "Annotation for " << key->getName() << ":\n";
-        dbgs() << " - Value: " << annotation.value << "\n";
-        dbgs() << " - File:  " << annotation.file << "\n";
-        dbgs() << " - Line:  " << annotation.line << "\n";
+//         dbgs() << "Annotation for " << key->getName() << ":\n";
+//         dbgs() << " - Value: " << annotation.value << "\n";
+//         dbgs() << " - File:  " << annotation.file << "\n";
+//         dbgs() << " - Line:  " << annotation.line << "\n";
     }
 
     return false;

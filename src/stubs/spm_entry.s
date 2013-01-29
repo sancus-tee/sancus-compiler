@@ -8,7 +8,11 @@
 __spm_entry:
     #switch stack
     mov &__spm_sp, r1
+    cmp #0x0, r1
+    jne 1f
+    mov #__spm_stack_init, r1
 
+1:
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
@@ -50,7 +54,7 @@ __spm_entry:
     clr r2
 
     ; clear the return registers which are not used
-    mov 6+__spm_table(r6), r6
+    mov 4+__spm_table(r6), r6
     rra r6
     jc 1f
     clr r12
@@ -63,6 +67,7 @@ __spm_entry:
     clr r15
 
 1:
+    mov r1, &__spm_sp
     mov #0xffff, r6
     br r7
 
