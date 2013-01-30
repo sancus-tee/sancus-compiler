@@ -52,6 +52,7 @@ set_args(args)
 spms = set()
 spms_table_order = {}
 spms_entries = {}
+spms_calls = {}
 
 for file_name in args.in_files:
   try:
@@ -78,13 +79,32 @@ for file_name in args.in_files:
                       for rel in section.iter_relocations()]
           entries.sort()
           spms_entries[spm_name] += [entry for _, entry in entries]
+          continue
+
+        match = re.match(r'.rela.spm.(\w+).text', section.name)
+        if match:
+          spm_name = match.group(1)
+          if not spm_name in spms_calls:
+            spms_calls[spm_name] = set()
+
+          #find call from this SPM to others
+          symtab = elf_file.get_section(section['sh_link'])
+          for rel in section.iter_relocations():
+            rel_match = re.match(r'__spm_(\w+)_entry',
+                                 symtab.get_symbol(rel['r_info_sym']).name)
+            if rel_match:
+              assert rel_match.group(1) != spm_name
+              spms_calls[spm_name].add(rel_match.group(1))
+          continue
   except IOError as e:
     fatal_error(str(e))
 
 if len(spms) > 0:
   info('Found SPMs:')
   for spm in spms:
-    info(' - {} with entries: {}'.format(spm, ', '.join(spms_entries[spm])))
+    info(' * {}:'.format(spm))
+    info('  - Entries: {}'.format(', '.join(spms_entries[spm])))
+    info('  - Calls:   {}'.format(', '.join(spms_calls[spm])))
 else:
   info('No SPMs found')
 
@@ -116,13 +136,21 @@ data_section = '''.data.spm.{0} :
     __spm_{0}_secret_end = .;
   }} > REGION_DATA'''
 
+hmac_section = '''.data.spm.{0}.hmac.{1} :
+  {{
+    . = ALIGN(2);
+    __spm_{0}_hmac_{1} = .;
+    BYTE(0x00); /* without this, this section will be empty in the binary */
+    . += 15;
+  }} > REGION_TEXT'''
+
 text_sections = []
 data_sections = []
+hmac_sections = []
 symbols = []
 for spm in spms:
-  tables = []
-  for file in spms_table_order[spm]:
-    tables.append('{}(.spm.{}.table)'.format(file, spm))
+  tables = ['{}(.spm.{}.table)'.format(file, spm) for file in spms_table_order[spm]]
+  hmac_sections += [hmac_section.format(spm, callee) for callee in spms_calls[spm]]
 
   nentries = '__spm_{}_nentries'.format(spm)
   sym_map = {'__spm_entry'      : '__spm_{}_entry'.format(spm),
@@ -133,7 +161,7 @@ for spm in spms:
              '__spm_exit'       : '__spm_{}_exit'.format(spm),
              '__spm_stack_init' : '__spm_{}_stack_init'.format(spm)}
   sect_map = {'.spm.text' : '.spm.{}.text'.format(spm)}
-  
+
   entry_file = rename_syms_sects(get_data_path() + '/spm_entry.o', sym_map, sect_map)
   exit_file = rename_syms_sects(get_data_path() + '/spm_exit.o', sym_map, sect_map)
   args.in_files += [entry_file, exit_file]
@@ -149,6 +177,7 @@ for spm in spms:
 
 text_sections = '\n  '.join(text_sections)
 data_sections = '\n  '.join(data_sections)
+hmac_sections = '\n  '.join(hmac_sections)
 symbols = '\n'.join(symbols)
 
 tmp_ldscripts_path = get_tmp_dir()
@@ -184,6 +213,7 @@ with open(template_path + '/msp430.x', 'r') as ldscript:
 
 contents = template.substitute(spm_text_sections=text_sections,
                                spm_data_sections=data_sections,
+                               spm_hmac_sections=hmac_sections,
                                spm_symbols=symbols)
 
 ldscript_name = tmp_ldscripts_path + '/msp430.x'

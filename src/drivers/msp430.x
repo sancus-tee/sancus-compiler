@@ -77,6 +77,7 @@ SECTIONS
      . = ALIGN(2);
   }  > REGION_TEXT
   $spm_text_sections
+  $spm_hmac_sections
    _etext = .; /* Past last read-only (loadable) segment */
   .data   :
   {
