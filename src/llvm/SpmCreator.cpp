@@ -125,8 +125,17 @@ bool SpmCreator::handleFunction(Function& f)
                     continue;
             }
 
-            report_fatal_error("In function " + f.getName() +
-                               ": Function pointers not supported yet");
+            DebugLoc loc = inst->getDebugLoc();
+            Twine locStr;
+            if (!loc.isUnknown())
+            {
+                locStr = " (" + Twine(loc.getLine()) + ":" +
+                         Twine(loc.getCol()) + ")";
+            }
+
+            errs() << "WARNING: In function " << f.getName() << locStr
+                   << ": Function pointers not supported yet\n";
+            continue;
         }
         else if (callee->isIntrinsic())
             continue;
