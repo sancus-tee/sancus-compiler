@@ -16,7 +16,10 @@ struct SpmInfo
     std::string getSpName() const;
     std::string getEntryName() const;
     std::string getExitName() const;
+    std::string getVerifyName() const;
     std::string getIndexName(const std::string& entry) const;
+    std::string getCalleeIdName(const std::string& callee) const;
+    std::string getCalleeHmacName(const std::string& callee) const;
     std::string getCalleeStubName(const std::string& callee) const;
 };
 

@@ -36,6 +36,9 @@ struct SpmCreator : ModulePass
     Function* getStub(Function& caller, Function& callee);
     SpmInfo getSpmInfo(const GlobalValue* gv);
     Function* getCalledFunction(CallSite cs);
+    Instruction* getVerification(SpmInfo callerInfo, SpmInfo calleeInfo,
+                                 Module& m);
+    GlobalVariable* getSymbolAddress(Module& m, StringRef name);
 
     typedef std::map<const GlobalValue*, SpmInfo> InfoMap;
     InfoMap spmInfo;
@@ -44,6 +47,11 @@ struct SpmCreator : ModulePass
     EntryList entries;
     typedef std::map<std::pair<std::string, Function*>, Function*> StubMap;
     StubMap stubs;
+
+    Type* wordTy;
+    Type* byteTy;
+    Type* voidPtrTy;
+    FunctionType* verifyTy;
 };
 
 }
@@ -62,6 +70,15 @@ void SpmCreator::getAnalysisUsage(AnalysisUsage& au) const
 
 bool SpmCreator::runOnModule(Module& m)
 {
+    LLVMContext& ctx = m.getContext();
+    wordTy = TypeBuilder<types::i<16>, true>::get(ctx);
+    byteTy = TypeBuilder<types::i<8>, true>::get(ctx);
+    voidPtrTy = TypeBuilder<types::i<8>*, true>::get(ctx);
+
+    Type* argTys[] = {voidPtrTy, voidPtrTy, voidPtrTy};
+    verifyTy = FunctionType::get(Type::getVoidTy(ctx), argTys,
+                                 /*isVarArg=*/false);
+
     bool modified = false;
 
     for (GlobalVariable& gv : m.getGlobalList())
@@ -90,9 +107,12 @@ bool SpmCreator::handleFunction(Function& f)
     if (info.isEntry)
         entries.push_back(&f);
 
+    std::map<Instruction*, Instruction*> verifications;
+
     for (inst_iterator it = inst_begin(f), end = inst_end(f); it != end; ++it)
     {
-        CallSite cs(&*it);
+        Instruction* inst = &*it;
+        CallSite cs(inst);
         if (!cs)
             continue;
 
@@ -111,12 +131,21 @@ bool SpmCreator::handleFunction(Function& f)
         else if (callee->isIntrinsic())
             continue;
 
+        if (Instruction* v = getVerification(info, getSpmInfo(callee),
+                                             *f.getParent()))
+        {
+            verifications[inst] = v;
+        }
+
         Function* stub = getStub(f, *callee);
         cs.setCalledFunction(stub);
 
         if (stub != callee)
             modified = true;
     }
+
+    for (auto pair : verifications)
+        pair.second->insertBefore(pair.first);
 
     return modified;
 }
@@ -137,8 +166,6 @@ bool SpmCreator::handleData(GlobalVariable& gv)
 void SpmCreator::createFunctionTable(Module& m)
 {
     LLVMContext& ctx = m.getContext();
-    Type* wordTy = TypeBuilder<types::i<16>, true>::get(ctx);
-    Type* voidPtrTy = TypeBuilder<types::i<8>*, true>::get(ctx);
 
     // struct SpmFunctionInfo
     // {
@@ -162,12 +189,6 @@ void SpmCreator::createFunctionTable(Module& m)
 
         // initializer for the SpmFunctionInfo struct
         FunctionCcInfo ccInfo(f);
-        if (ccInfo.argsLength != 0 || ccInfo.retLength != 0)
-        {
-            errs() << "Warning: Passing arguments on the stack between SPMs "
-                      "will not work";
-        }
-
         Constant* funcFields[] = {ConstantExpr::getBitCast(f, voidPtrTy),
                                   ConstantInt::get(wordTy, ccInfo.argsLength),
                                   ConstantInt::get(wordTy, ccInfo.retRegsUsage)};
@@ -202,6 +223,8 @@ Function* SpmCreator::getStub(Function& caller, Function& callee)
 
     Function* stub = nullptr;
     std::string stubAsm;
+
+    FunctionCcInfo ccInfo(&callee);
 
     if (callerInfo.name == calleeInfo.name) // call within SPM/unprotected
         stub = &callee;
@@ -242,7 +265,6 @@ Function* SpmCreator::getStub(Function& caller, Function& callee)
     }
     else // call SPM -> SPM/unprotected
     {
-        FunctionCcInfo ccInfo(&callee);
         std::string sectionName = callerInfo.getTextSection();
         std::string stubName = callerInfo.getCalleeStubName(callee.getName());
         Twine regsUsage = Twine(ccInfo.argRegsUsage);
@@ -275,6 +297,16 @@ Function* SpmCreator::getStub(Function& caller, Function& callee)
 
         stub = Function::Create(callee.getFunctionType(),
                                 Function::ExternalLinkage, stubName, m);
+    }
+
+    if (stub != &callee && (ccInfo.argsLength != 0 ||
+                            ccInfo.retLength != 0  ||
+                            callee.isVarArg()))
+    {
+        report_fatal_error("Call from " + caller.getName() + " to " +
+                           callee.getName() + " uses the stack for parameter "
+                           "and/or return value passing. This is not "
+                           "supported for SPMs.");
     }
 
     if (!stubAsm.empty())
@@ -332,4 +364,49 @@ Function* SpmCreator::getCalledFunction(CallSite cs)
     }
 
     return nullptr;
+}
+
+Instruction* SpmCreator::getVerification(SpmInfo callerInfo,
+                                         SpmInfo calleeInfo,
+                                         Module& m)
+{
+    if (!callerInfo.isInSpm ||
+        !calleeInfo.isInSpm ||
+        callerInfo.name == calleeInfo.name)
+    {
+        return nullptr;
+    }
+
+    std::string verifyName = callerInfo.getVerifyName();
+    Function* verifyStub = m.getFunction(verifyName);
+
+    if (verifyStub == nullptr)
+    {
+        verifyStub = Function::Create(verifyTy, Function::ExternalLinkage,
+                                      verifyName, &m);
+    }
+
+    // argument 1: address of expected HMAC
+    Value* hmac =
+        getSymbolAddress(m, callerInfo.getCalleeHmacName(calleeInfo.name));
+
+    // argument 2: address of SPM
+    Value* spm = getSymbolAddress(m, calleeInfo.getEntryName());
+
+    // argument 3: address of stored ID
+    Value* id =
+        getSymbolAddress(m, callerInfo.getCalleeIdName(calleeInfo.name));
+
+    Value* args[] = {hmac, spm, id};
+    return CallInst::Create(verifyStub, args);
+}
+
+GlobalVariable* SpmCreator::getSymbolAddress(Module& m, StringRef name)
+{
+    if (GlobalVariable* gv = m.getGlobalVariable(name))
+        return gv;
+
+    return new GlobalVariable(m, byteTy, /*isConstant=*/false,
+                              GlobalVariable::ExternalLinkage,
+                              /*Initializer=*/nullptr, name);
 }

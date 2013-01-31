@@ -72,9 +72,10 @@ def get_tmp_dir():
 
 @atexit.register
 def cleanup():
-  info('Cleaning up temporary files: ' + ', '.join(tmp_files))
-  rm(*tmp_files)
-  del tmp_files[:]
+  if tmp_files:
+    info('Cleaning up temporary files: ' + ', '.join(tmp_files))
+    rm(*tmp_files)
+    del tmp_files[:]
 
 def call_prog(prog, arguments=[], get_output=False):
   cmd = [prog] + arguments

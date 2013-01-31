@@ -84,8 +84,6 @@ for file_name in args.in_files:
         match = re.match(r'.rela.spm.(\w+).text', section.name)
         if match:
           spm_name = match.group(1)
-          if not spm_name in spms_calls:
-            spms_calls[spm_name] = set()
 
           #find call from this SPM to others
           symtab = elf_file.get_section(section['sh_link'])
@@ -94,6 +92,8 @@ for file_name in args.in_files:
                                  symtab.get_symbol(rel['r_info_sym']).name)
             if rel_match:
               assert rel_match.group(1) != spm_name
+              if not spm_name in spms_calls:
+                spms_calls[spm_name] = set()
               spms_calls[spm_name].add(rel_match.group(1))
           continue
   except IOError as e:
@@ -103,8 +103,14 @@ if len(spms) > 0:
   info('Found SPMs:')
   for spm in spms:
     info(' * {}:'.format(spm))
-    info('  - Entries: {}'.format(', '.join(spms_entries[spm])))
-    info('  - Calls:   {}'.format(', '.join(spms_calls[spm])))
+    if spm in spms_entries:
+      info('  - Entries: {}'.format(', '.join(spms_entries[spm])))
+    else:
+      info('  - No entries')
+    if spm in spms_calls:
+      info('  - Calls:   {}'.format(', '.join(spms_calls[spm])))
+    else:
+      info('  - No calls to other SPMs')
 else:
   info('No SPMs found')
 
@@ -128,7 +134,8 @@ data_section = '''.data.spm.{0} :
     . = ALIGN(2);
     __spm_{0}_secret_start = .;
     *(.spm.{0}.data)
-    . += {1};
+    {1}
+    . += {2};
     __spm_{0}_stack_init = .;
     __spm_{0}_sp = .;
     . += 2;
@@ -149,9 +156,6 @@ data_sections = []
 hmac_sections = []
 symbols = []
 for spm in spms:
-  tables = ['{}(.spm.{}.table)'.format(file, spm) for file in spms_table_order[spm]]
-  hmac_sections += [hmac_section.format(spm, callee) for callee in spms_calls[spm]]
-
   nentries = '__spm_{}_nentries'.format(spm)
   sym_map = {'__spm_entry'      : '__spm_{}_entry'.format(spm),
              '__spm_nentries'   : nentries,
@@ -159,8 +163,22 @@ for spm in spms:
              '__spm_sp'         : '__spm_{}_sp'.format(spm),
              '__ret_entry'      : '__spm_{}_ret_entry'.format(spm),
              '__spm_exit'       : '__spm_{}_exit'.format(spm),
-             '__spm_stack_init' : '__spm_{}_stack_init'.format(spm)}
+             '__spm_stack_init' : '__spm_{}_stack_init'.format(spm),
+             '__spm_verify'     : '__spm_{}_verify'.format(spm)}
   sect_map = {'.spm.text' : '.spm.{}.text'.format(spm)}
+
+  tables = []
+  if spm in spms_table_order:
+    tables = ['{}(.spm.{}.table)'.format(file, spm) for file in spms_table_order[spm]]
+
+  id_syms = []
+  if spm in spms_calls:
+    for callee in spms_calls[spm]:
+      hmac_sections.append(hmac_section.format(spm, callee))
+      id_syms += ['__spm_{}_id_{} = .;'.format(spm, callee), '. += 2;']
+
+    verify_file = rename_syms_sects(get_data_path() + '/spm_verify.o', sym_map, sect_map)
+    args.in_files.append(verify_file)
 
   entry_file = rename_syms_sects(get_data_path() + '/spm_entry.o', sym_map, sect_map)
   exit_file = rename_syms_sects(get_data_path() + '/spm_exit.o', sym_map, sect_map)
@@ -168,7 +186,8 @@ for spm in spms:
 
   text_sections.append(text_section.format(spm, entry_file, exit_file,
                                            '\n    '.join(tables)))
-  data_sections.append(data_section.format(spm, args.spm_stack_size))
+  data_sections.append(data_section.format(spm, '\n    '.join(id_syms),
+                                           args.spm_stack_size))
 
   symbols.append('{} = {};'.format(nentries, len(spms_entries[spm])))
   for idx, entry in enumerate(spms_entries[spm]):
