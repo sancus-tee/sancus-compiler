@@ -11,7 +11,9 @@ if (CMAKE_COMPILER_IS_GNUCXX)
     get_compiler_version()
 
     if (COMPILER_VERSION VERSION_LESS ${GCC_MIN_VERSION})
-        message(FATAL_ERROR "GCC version >= ${GCC_MIN_VERSION} required")
+        message(FATAL_ERROR "GCC version >= ${GCC_MIN_VERSION} required\n"
+                            "If you are using GCC version >= 4.6.0 and cannot install ${GCC_MIN_VERSION}, "
+                            "you can switch to the gcc-4.6 branch: 'git checkout -b gcc-4.6 origin/gcc-4.6'")
     endif()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     get_compiler_version()
