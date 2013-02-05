@@ -2,8 +2,8 @@
 OUTPUT_FORMAT("elf32-msp430")
 OUTPUT_ARCH("msp430")
 
-INCLUDE memory.x
-INCLUDE periph.x
+INCLUDE $mcu_ldscripts_path/memory.x
+INCLUDE $mcu_ldscripts_path/periph.x
 
 SECTIONS
 {

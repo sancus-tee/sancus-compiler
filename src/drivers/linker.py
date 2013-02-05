@@ -233,7 +233,8 @@ with open(template_path + '/msp430.x', 'r') as ldscript:
 contents = template.substitute(spm_text_sections=text_sections,
                                spm_data_sections=data_sections,
                                spm_hmac_sections=hmac_sections,
-                               spm_symbols=symbols)
+                               spm_symbols=symbols,
+                               mcu_ldscripts_path=mcu_ldscripts_path)
 
 ldscript_name = tmp_ldscripts_path + '/msp430.x'
 with open(ldscript_name, 'w') as ldscript:
