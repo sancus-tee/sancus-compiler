@@ -84,9 +84,13 @@ def fill_hmac_sections(file):
         out_file.seek(section['sh_offset'])
         out_file.write(hmac)
 
+# FIXME this should be moved to the common argument parser!
 parser = argparse.ArgumentParser()
 parser.add_argument('--verbose',
                     help='Show information messages',
+                    action='store_true')
+parser.add_argument('--debug',
+                    help='Show debug output and keep intermediate files',
                     action='store_true')
 parser.add_argument('--hmac',
                     help='Generate HMAC for SPM',

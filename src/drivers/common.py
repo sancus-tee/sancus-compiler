@@ -7,7 +7,7 @@ import shutil
 import atexit
 
 import logging
-from logging import info, warning, error
+from logging import debug, info, warning, error
 
 logging.basicConfig(format='%(levelname)s: %(message)s')
 
@@ -28,6 +28,9 @@ def get_common_parser():
   parser.add_argument('--verbose',
                       help='Show information messages',
                       action='store_true')
+  parser.add_argument('--debug',
+                      help='Show debug output and keep intermediate files',
+                      action='store_true')
   parser.add_argument('-o',
                       dest='out_file',
                       help='Place the output into file',
@@ -45,7 +48,9 @@ def get_common_parser():
 def set_args(a):
   global args
   args = a
-  if args.verbose:
+  if args.debug:
+    logging.getLogger().setLevel(logging.DEBUG)
+  elif args.verbose:
     logging.getLogger().setLevel(logging.INFO)
 
 def rm(*files):
@@ -73,14 +78,16 @@ def get_tmp_dir():
 @atexit.register
 def cleanup():
   if tmp_files:
-    info('Cleaning up temporary files: ' + ', '.join(tmp_files))
-    rm(*tmp_files)
-    del tmp_files[:]
+    if args.debug:
+      debug('Keeping temporary files: ' + ', '.join(tmp_files))
+    else:
+      info('Cleaning up temporary files: ' + ', '.join(tmp_files))
+      rm(*tmp_files)
+      del tmp_files[:]
 
 def call_prog(prog, arguments=[], get_output=False):
   cmd = [prog] + arguments
-  if args.verbose:
-    print ' '.join(cmd)
+  debug(' '.join(cmd))
 
   try:
     if get_output:
