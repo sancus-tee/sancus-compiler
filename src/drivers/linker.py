@@ -4,6 +4,7 @@ import re
 import string
 
 from elftools.elf.elffile import ELFFile
+from elftools.common.exceptions import ELFError
 
 from common import *
 
@@ -98,6 +99,8 @@ for file_name in args.in_files:
           continue
   except IOError as e:
     fatal_error(str(e))
+  except ELFError as e:
+    debug('Not checking {} for SPMs because it is not a valid ELF file ({})'.format(file_name, e))
 
 if len(spms) > 0:
   info('Found SPMs:')
