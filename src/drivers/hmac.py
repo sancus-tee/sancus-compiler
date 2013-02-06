@@ -37,13 +37,19 @@ def _int_to_bytes(i):
   assert 0 <= i < 2 ** 16
   return struct.pack('>H', i)
 
-def _parse_key(key_str):
-  if len(key_str) != 32:
-    raise argparse.ArgumentTypeError('Incorrect key size')
+def _parse_hex(hex_str, size):
+  if len(hex_str) != size:
+    raise argparse.ArgumentTypeError('Incorrect hex size')
   try:
-    return key_str.decode('hex')
+    return hex_str.decode('hex')
   except TypeError:
-    raise argparse.ArgumentTypeError('Incorrect key format')
+    raise argparse.ArgumentTypeError('Incorrect hex format')
+
+def _parse_key(key_str):
+  return _parse_hex(key_str, 32)
+
+def _parse_id(id_str):
+  return _parse_hex(id_str, 4)
 
 def get_spm_key(file, spm, master_key, hex_out=True):
   elf_file = ELFFile(file)
@@ -103,27 +109,35 @@ parser.add_argument('--key',
                     type=_parse_key,
                     metavar='key',
                     required=True)
+parser.add_argument('--vendor-key',
+                    help='Generate the vendor key for the given ID',
+                    type=_parse_id,
+                    metavar='ID')
 parser.add_argument('-o',
                     help='Output file',
                     dest='out_file',
                     metavar='file')
 parser.add_argument('in_file',
                     help='Input file',
-                    metavar='file')
+                    metavar='file',
+                    nargs='?')
 args = parser.parse_args()
 set_args(args)
 
 try:
-  with open(args.in_file, 'r') as file:
-    if args.hkdf:
-      print(get_spm_key(file, args.hkdf, args.key))
-    elif args.hmac:
-      print(get_spm_hmac(file, args.hmac, args.key))
-    else:
-      if not args.out_file:
-        fatal_error('Requested to fill HMAC sections but no output file given')
+  if args.vendor_key:
+    print hkdf(args.key, args.vendor_key)
+  else:
+    with open(args.in_file, 'r') as file:
+      if args.hkdf:
+        print(get_spm_key(file, args.hkdf, args.key))
+      elif args.hmac:
+        print(get_spm_hmac(file, args.hmac, args.key))
       else:
-        fill_hmac_sections(file)
+        if not args.out_file:
+          fatal_error('Requested to fill HMAC sections but no output file given')
+        else:
+          fill_hmac_sections(file)
 except IOError as e:
   fatal_error('Cannot open file: ' + str(e))
 #except Exception as e:
