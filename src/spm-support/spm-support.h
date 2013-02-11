@@ -80,7 +80,7 @@ always_inline spm_id hmac_sign(void* dest, const void* src, size_t n)
 #define __ANNOTATE(x) __attribute__((annotate(x)))
 
 #define SPM_FUNC(name)  __ANNOTATE("spm:" name)
-#define SPM_ENTRY(name) __ANNOTATE("spm_entry:" name)
+#define SPM_ENTRY(name) __ANNOTATE("spm_entry:" name) __attribute__((noinline, used))
 #define SPM_DATA(name)  SPM_FUNC(name)
 
 #endif
