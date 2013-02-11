@@ -37,8 +37,8 @@ def _int_to_bytes(i):
   assert 0 <= i < 2 ** 16
   return struct.pack('>H', i)
 
-def _parse_hex(hex_str, size):
-  if len(hex_str) != size:
+def _parse_hex(hex_str, size = 0):
+  if size > 0 and len(hex_str) != size:
     raise argparse.ArgumentTypeError('Incorrect hex size')
   try:
     return hex_str.decode('hex')
@@ -113,6 +113,10 @@ parser.add_argument('--vendor-key',
                     help='Generate the vendor key for the given ID',
                     type=_parse_id,
                     metavar='ID')
+parser.add_argument('--signature',
+                    help='Generate a signature of the given data',
+                    type=_parse_hex,
+                    metavar='data')
 parser.add_argument('-o',
                     help='Output file',
                     dest='out_file',
@@ -127,6 +131,8 @@ set_args(args)
 try:
   if args.vendor_key:
     print hkdf(args.key, args.vendor_key)
+  elif args.signature:
+    print hmac(args.key, args.signature)
   else:
     with open(args.in_file, 'r') as file:
       if args.hkdf:
