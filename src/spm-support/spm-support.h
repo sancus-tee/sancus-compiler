@@ -1,6 +1,8 @@
 #ifndef SPM_SUPPORT_H
 #define SPM_SUPPORT_H
 
+#include <stddef.h>
+
 typedef unsigned spm_id;
 typedef unsigned vendor_id;
 
@@ -61,6 +63,20 @@ always_inline spm_id hmac_write(char* dst, struct Spm* spm)
     return ret;
 }
 
+always_inline spm_id hmac_sign(void* dest, const void* src, size_t n)
+{
+    spm_id ret;
+    asm("mov %1, r13\n\t"
+        "mov %2, r14\n\t"
+        "mov %3, r15\n\t"
+        ".word 0x1384\n\t"
+        "mov r15, %0"
+        : "=m"(ret)
+        : "m"(src), "r"((char*)src + n), "m"(dest)
+        : "r13", "r14", "r15");
+    return ret;
+}
+
 #define __ANNOTATE(x) __attribute__((annotate(x)))
 
 #define SPM_FUNC(name)  __ANNOTATE("spm:" name)
@@ -68,3 +84,4 @@ always_inline spm_id hmac_write(char* dst, struct Spm* spm)
 #define SPM_DATA(name)  SPM_FUNC(name)
 
 #endif
+
