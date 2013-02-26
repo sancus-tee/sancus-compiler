@@ -85,10 +85,14 @@ def fill_hmac_sections(file):
           keys[caller] = get_spm_key(file, caller, args.key, False)
           info('Key used for SPM {}: {}'.format(caller, keys[caller].encode('hex')))
 
-        hmac = get_spm_hmac(file, callee, keys[caller], False)
-        info('HMAC of {} used by {}: {}'.format(callee, caller, hmac.encode('hex')))
-        out_file.seek(section['sh_offset'])
-        out_file.write(hmac)
+        try:
+          hmac = get_spm_hmac(file, callee, keys[caller], False)
+          info('HMAC of {} used by {}: {}'.format(callee, caller, hmac.encode('hex')))
+          out_file.seek(section['sh_offset'])
+          out_file.write(hmac)
+        except ValueError:
+          # FIXME: this is a compiler bug workaround
+          warning('Not adding HMAC for call to unknown SPM {}'.format(callee))
 
 # FIXME this should be moved to the common argument parser!
 parser = argparse.ArgumentParser()
