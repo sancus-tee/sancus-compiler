@@ -30,7 +30,7 @@ struct Spm
 
 int protect_spm(struct Spm* spm);
 
-#define always_inline inline __attribute__((always_inline))
+#define always_inline static inline __attribute__((always_inline))
 
 always_inline void unprotect_spm()
 {
