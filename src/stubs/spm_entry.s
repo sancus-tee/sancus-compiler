@@ -50,8 +50,8 @@ __spm_entry:
     pop r5
     pop r4
 
-    ; clear status register
-    clr r2
+    ; clear the arithmetic status bits (0, 1, 2 and 8) of the status register
+    and #0x7ef8, r2
 
     ; clear the return registers which are not used
     mov 4+__spm_table(r6), r6
