@@ -77,6 +77,8 @@ always_inline spm_id hmac_sign(void* dest, const void* src, size_t n)
     return ret;
 }
 
+void __unprotected_entry(void);
+
 #define __ANNOTATE(x) __attribute__((annotate(x)))
 
 #define SPM_FUNC(name)  __ANNOTATE("spm:" name)

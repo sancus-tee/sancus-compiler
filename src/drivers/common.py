@@ -22,7 +22,8 @@ def get_msp_paths():
     base = os.path.abspath(os.path.dirname(base + '/../../..'))
     info('Found MSP430 install directory: ' + base)
     include = base + '/include'
-    ldscripts = base + '/lib/ldscripts'
+    lib = base + '/lib'
+    ldscripts = lib + '/ldscripts'
     return locals()
 
 

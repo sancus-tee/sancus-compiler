@@ -1,5 +1,6 @@
     .data
     .align 2
+    .global __unprotected_sp
 __unprotected_sp:
     .word 0x0000
 

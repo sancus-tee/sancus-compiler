@@ -34,6 +34,7 @@ def parse_size(val):
 
 parser = argparse.ArgumentParser(description='SPM linker for the MSP430.',
                                  parents=[get_common_parser()])
+parser.add_argument('--standalone', action='store_true')
 parser.add_argument('--ram-size',
                     choices=['128', '256', '512', '1K', '2K', '4K', '5K',
                              '8K', '10K', '16K', '24K', '32K'],
@@ -136,7 +137,7 @@ text_section = '''.text.spm.{0} :
     {3}
     . = ALIGN(2);
     __spm_{0}_public_end = .;
-  }} > REGION_TEXT'''
+  }}'''
 
 data_section = '''.data.spm.{0} :
   {{
@@ -150,7 +151,7 @@ data_section = '''.data.spm.{0} :
     . += 2;
     . = ALIGN(2);
     __spm_{0}_secret_end = .;
-  }} > REGION_DATA'''
+  }}'''
 
 hmac_section = '''.data.spm.{0}.hmac.{1} :
   {{
@@ -158,7 +159,12 @@ hmac_section = '''.data.spm.{0}.hmac.{1} :
     __spm_{0}_hmac_{1} = .;
     BYTE(0x00); /* without this, this section will be empty in the binary */
     . += 15;
-  }} > REGION_TEXT'''
+  }}'''
+
+if args.standalone:
+    text_section += ' > REGION_TEXT'
+    data_section += ' > REGION_DATA'
+    hmac_section += ' > REGION_TEXT'
 
 text_sections = []
 data_sections = []
@@ -214,34 +220,39 @@ symbols = '\n'.join(symbols)
 
 tmp_ldscripts_path = get_tmp_dir()
 template_path = get_data_path()
+msp_paths = get_msp_paths()
 
-if args.mcu:
-    msp_paths = get_msp_paths()
-    ldscripts_path = msp_paths['ldscripts']
-    mcu_ldscripts_path = ldscripts_path + '/' + args.mcu
+if args.standalone:
+    if args.mcu:
+        ldscripts_path = msp_paths['ldscripts']
+        mcu_ldscripts_path = ldscripts_path + '/' + args.mcu
 
-    if os.path.exists(mcu_ldscripts_path):
-        info('Using linker scripts path: ' + mcu_ldscripts_path)
+        if os.path.exists(mcu_ldscripts_path):
+            info('Using linker scripts path: ' + mcu_ldscripts_path)
+        else:
+            fatal_error('No linker scripts found for MCU ' + args.mcu)
     else:
-        fatal_error('No linker scripts found for MCU ' + args.mcu)
+        mcu_ldscripts_path = tmp_ldscripts_path
+        shutil.copy(template_path + '/periph.x', mcu_ldscripts_path)
+
+        ram_length = parse_size(args.ram_size)
+        rom_length = parse_size(args.rom_size)
+        rom_origin = 0x10000 - rom_length
+        with open(template_path + '/memory.x', 'r') as memscript:
+            template = string.Template(memscript.read())
+
+        contents = template.substitute(ram_length=ram_length,
+                                       rom_length=rom_length,
+                                       rom_origin=rom_origin)
+        with open(mcu_ldscripts_path + '/memory.x', 'w') as memscript:
+            memscript.write(contents)
+
+    with open(template_path + '/msp430.x', 'r') as ldscript:
+        template = string.Template(ldscript.read())
 else:
     mcu_ldscripts_path = tmp_ldscripts_path
-    shutil.copy(template_path + '/periph.x', mcu_ldscripts_path)
-
-    ram_length = parse_size(args.ram_size)
-    rom_length = parse_size(args.rom_size)
-    rom_origin = 0x10000 - rom_length
-    with open(template_path + '/memory.x', 'r') as memscript:
-        template = string.Template(memscript.read())
-
-    contents = template.substitute(ram_length=ram_length,
-                                   rom_length=rom_length,
-                                   rom_origin=rom_origin)
-    with open(mcu_ldscripts_path + '/memory.x', 'w') as memscript:
-        memscript.write(contents)
-
-with open(template_path + '/msp430.x', 'r') as ldscript:
-    template = string.Template(ldscript.read())
+    with open(template_path + '/spm.ld', 'r') as ldscript:
+        template = string.Template(ldscript.read())
 
 contents = template.substitute(spm_text_sections=text_sections,
                                spm_data_sections=data_sections,
@@ -253,8 +264,8 @@ ldscript_name = tmp_ldscripts_path + '/msp430.x'
 with open(ldscript_name, 'w') as ldscript:
     ldscript.write(contents)
 
-#with open(ldscript_name, 'r') as ldscript:
-  #print ldscript.read()
+with open(ldscript_name, 'r') as ldscript:
+    print ldscript.read()
 
 out_file = args.out_file
 if not out_file:
@@ -262,7 +273,12 @@ if not out_file:
 
 info('Using output file ' + out_file)
 
-ld_args += ['-L', mcu_ldscripts_path, '-T', ldscript_name, '-o', out_file]
-ld_args += args.in_files + [get_data_path() + '/unprotected_entry.o',
-                            '-lspm-support']
-call_prog('msp430-gcc', ld_args)
+ld_args += ['-L', mcu_ldscripts_path, '-L', msp_paths['lib'],
+            '-T', ldscript_name, '-lspm-support', '-o', out_file]
+
+if args.standalone:
+    ld_args += ['-lspm-host-support'] + args.in_files
+    call_prog('msp430-gcc', ld_args)
+else:
+    ld_args += ['-r']  # , '--gc-sections', '--entry', '__spm_public_start']
+    call_prog('msp430-ld', ld_args)

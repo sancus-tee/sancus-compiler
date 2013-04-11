@@ -21,6 +21,7 @@ set(FILES
     msp430.x
     memory.x
     periph.x
+    spm.ld
 )
 
 install(FILES ${FILES} DESTINATION ${INSTALL_DATA_PATH})
