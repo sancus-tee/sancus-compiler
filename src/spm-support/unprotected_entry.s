@@ -1,3 +1,8 @@
+    .data
+    .align 2
+__unprotected_sp:
+    .word 0x0000
+
     .text
     .align 2
     .global __unprotected_entry
