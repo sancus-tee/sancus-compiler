@@ -280,5 +280,5 @@ if args.standalone:
     ld_args += ['-lspm-host-support'] + args.in_files
     call_prog('msp430-gcc', ld_args)
 else:
-    ld_args += ['-r']  # , '--gc-sections', '--entry', '__spm_public_start']
+    ld_args += ['-r'] + args.in_files
     call_prog('msp430-ld', ld_args)

@@ -10,9 +10,20 @@ from elftools.elf.elffile import ELFFile
 
 _lib = ctypes.cdll.LoadLibrary(get_data_path() + '/libhmac-spongent.so')
 
+def _print_data(data):
+    for i, b in enumerate(data):
+        need_nl = True
+        print b.encode('hex'),
+        if (i + 1) % 26 == 0:
+            need_nl = False
+            print '\n',
+    if need_nl:
+        print '\n',
 
 def _gen_lib_call(func):
     def lib_call(key, msg, hex_out=True):
+        if args.debug:
+            _print_data(msg)
         ret = '\x00' * 16
         func(key, msg, len(msg), ret)
         return ret.encode('hex') if hex_out else ret
@@ -142,6 +153,7 @@ parser.add_argument('in_file',
                     help='Input file',
                     metavar='file',
                     nargs='?')
+
 args = parser.parse_args()
 set_args(args)
 

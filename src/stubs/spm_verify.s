@@ -27,4 +27,4 @@ __spm_verify:
     ret
 
 .Lexit:
-    call exit
+    call #exit
