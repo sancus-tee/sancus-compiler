@@ -264,8 +264,8 @@ ldscript_name = tmp_ldscripts_path + '/msp430.x'
 with open(ldscript_name, 'w') as ldscript:
     ldscript.write(contents)
 
-with open(ldscript_name, 'r') as ldscript:
-    print ldscript.read()
+#with open(ldscript_name, 'r') as ldscript:
+    #print ldscript.read()
 
 out_file = args.out_file
 if not out_file:
@@ -274,11 +274,13 @@ if not out_file:
 info('Using output file ' + out_file)
 
 ld_args += ['-L', mcu_ldscripts_path, '-L', msp_paths['lib'],
-            '-T', ldscript_name, '-lspm-support', '-o', out_file]
+            '-T', ldscript_name, '-o', out_file]
+ld_libs = ['-lspm-support']
 
 if args.standalone:
-    ld_args += ['-lspm-host-support'] + args.in_files
+    ld_libs += ['-lspm-host-support']
+    ld_args += args.in_files + ld_libs
     call_prog('msp430-gcc', ld_args)
 else:
-    ld_args += ['-r'] + args.in_files
+    ld_args += ['-r'] + args.in_files + ld_libs
     call_prog('msp430-ld', ld_args)
