@@ -32,20 +32,20 @@ def parse_size(val):
         return int(match.group(1)) * 1024
 
 
-parser = argparse.ArgumentParser(description='SPM linker for the MSP430.',
+parser = argparse.ArgumentParser(description='Sancus module linker.',
                                  parents=[get_common_parser()])
 parser.add_argument('--standalone', action='store_true')
 parser.add_argument('--ram-size',
                     choices=['128', '256', '512', '1K', '2K', '4K', '5K',
                              '8K', '10K', '16K', '24K', '32K'],
-                    default='128')
+                    default='10K')
 parser.add_argument('--rom-size',
                     choices=['1K', '2K', '4K', '8K', '12K', '16K', '24K',
                              '32K', '41K', '48K', '51K', '54K', '55K'],
-                    default='2K')
+                    default='48K')
 parser.add_argument('-rdynamic', action='store_true')
 parser.add_argument('--spm-stack-size',
-                    help='Stack size for the SPM (in bytes)',
+                    help='Stack size for the module (in bytes)',
                     type=positive_int,
                     default=256,
                     metavar='size')
@@ -110,7 +110,7 @@ for file_name in args.in_files:
               'ELF file ({})'.format(file_name, e))
 
 if len(spms) > 0:
-    info('Found SPMs:')
+    info('Found Sancus modules:')
     for spm in spms:
         info(' * {}:'.format(spm))
         if spm in spms_entries:
@@ -120,9 +120,9 @@ if len(spms) > 0:
         if spm in spms_calls:
             info('  - Calls:   {}'.format(', '.join(spms_calls[spm])))
         else:
-            info('  - No calls to other SPMs')
+            info('  - No calls to other modules')
 else:
-    info('No SPMs found')
+    info('No Sancus modules found')
 
 # create output sections for the the SPM to be inserted in the linker script
 text_section = '''.text.spm.{0} :
@@ -193,13 +193,13 @@ for spm in spms:
             hmac_sections.append(hmac_section.format(spm, callee))
             id_syms += ['__spm_{}_id_{} = .;'.format(spm, callee), '. += 2;']
 
-        verify_file = rename_syms_sects(get_data_path() + '/spm_verify.o',
+        verify_file = rename_syms_sects(get_data_path() + '/sm_verify.o',
                                         sym_map, sect_map)
         args.in_files.append(verify_file)
 
-    entry_file = rename_syms_sects(get_data_path() + '/spm_entry.o',
+    entry_file = rename_syms_sects(get_data_path() + '/sm_entry.o',
                                    sym_map, sect_map)
-    exit_file = rename_syms_sects(get_data_path() + '/spm_exit.o',
+    exit_file = rename_syms_sects(get_data_path() + '/sm_exit.o',
                                   sym_map, sect_map)
     args.in_files += [entry_file, exit_file]
 
@@ -251,7 +251,7 @@ if args.standalone:
         template = string.Template(ldscript.read())
 else:
     mcu_ldscripts_path = tmp_ldscripts_path
-    with open(template_path + '/spm.ld', 'r') as ldscript:
+    with open(template_path + '/sancus.ld', 'r') as ldscript:
         template = string.Template(ldscript.read())
 
 contents = template.substitute(spm_text_sections=text_sections,
@@ -275,10 +275,10 @@ info('Using output file ' + out_file)
 
 ld_args += ['-L', mcu_ldscripts_path, '-L', msp_paths['lib'],
             '-T', ldscript_name, '-o', out_file]
-ld_libs = ['-lspm-support']
+ld_libs = ['-lsancus-sm-support']
 
 if args.standalone:
-    ld_libs += ['-lspm-host-support']
+    ld_libs += ['-lsancus-host-support']
     ld_args += args.in_files + ld_libs
     call_prog('msp430-gcc', ld_args)
 else:

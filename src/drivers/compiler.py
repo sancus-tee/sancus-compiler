@@ -8,7 +8,7 @@ def is_assembly(file):
     return ext.lower() == '.s'
 
 
-parser = argparse.ArgumentParser(description='SPM compiler for the MSP430.',
+parser = argparse.ArgumentParser(description='Sancus module compiler.',
                                  parents=[get_common_parser()])
 parser.add_argument('--spm-id',
                     help='ID for the SPM',
@@ -60,7 +60,7 @@ else:
     call_prog('clang', cc_args)
 
     opt_bc = get_tmp('.bc')
-    opt_args = ['--load', 'SpmCreator.so', '--create-spm',
+    opt_args = ['--load', 'SancusModuleCreator.so', '--create-sm',
                 '-o', opt_bc, init_bc]
     call_prog('opt', opt_args)
 

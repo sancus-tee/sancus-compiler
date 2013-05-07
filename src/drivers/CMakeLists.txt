@@ -1,14 +1,14 @@
 include(PythonConfig)
 find_python_module(elftools)
 
-configure_file(spm-compiler.in spm-compiler @ONLY)
-configure_file(spm-linker.in spm-linker @ONLY)
-configure_file(spm-hmac.in spm-hmac @ONLY)
+configure_file(sancus-cc.in sancus-cc @ONLY)
+configure_file(sancus-ld.in sancus-ld @ONLY)
+configure_file(sancus-hmac.in sancus-hmac @ONLY)
 
 set(PROGS
-    ${CMAKE_CURRENT_BINARY_DIR}/spm-compiler
-    ${CMAKE_CURRENT_BINARY_DIR}/spm-linker
-    ${CMAKE_CURRENT_BINARY_DIR}/spm-hmac
+    ${CMAKE_CURRENT_BINARY_DIR}/sancus-cc
+    ${CMAKE_CURRENT_BINARY_DIR}/sancus-ld
+    ${CMAKE_CURRENT_BINARY_DIR}/sancus-hmac
 )
 
 install(PROGRAMS ${PROGS} DESTINATION bin)
@@ -21,7 +21,7 @@ set(FILES
     msp430.x
     memory.x
     periph.x
-    spm.ld
+    sancus.ld
 )
 
 install(FILES ${FILES} DESTINATION ${INSTALL_DATA_PATH})

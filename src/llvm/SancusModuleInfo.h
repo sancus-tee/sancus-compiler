@@ -3,7 +3,7 @@
 
 #include <string>
 
-struct SpmInfo
+struct SancusModuleInfo
 {
     std::string name;
     bool isInSpm = false;

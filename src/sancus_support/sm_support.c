@@ -1,4 +1,4 @@
-#include "spm-support.h"
+#include "sm_support.h"
 
 int protect_spm(struct Spm* spm)
 {

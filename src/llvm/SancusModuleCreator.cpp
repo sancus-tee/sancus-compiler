@@ -1,7 +1,7 @@
 #define DEBUG_TYPE "spm-creator"
 
 #include "FunctionCcInfo.h"
-#include "SpmInfo.h"
+#include "SancusModuleInfo.h"
 #include "AnnotationParser.h"
 
 #include <llvm/Pass.h>
@@ -21,11 +21,11 @@ using namespace llvm;
 namespace
 {
 
-struct SpmCreator : ModulePass
+struct SancusModuleCreator : ModulePass
 {
     static char ID;
 
-    SpmCreator();
+    SancusModuleCreator();
 
     virtual void getAnalysisUsage(AnalysisUsage& au) const;
     virtual bool runOnModule(Module& m);
@@ -34,14 +34,15 @@ struct SpmCreator : ModulePass
     bool handleData(GlobalVariable& gv);
     void createFunctionTable(Module& m);
     Function* getStub(Function& caller, Function& callee);
-    SpmInfo getSpmInfo(const GlobalValue* gv);
+    SancusModuleInfo getSancusModuleInfo(const GlobalValue* gv);
     Function* getCalledFunction(CallSite cs);
-    Instruction* getVerification(SpmInfo callerInfo, SpmInfo calleeInfo,
+    Instruction* getVerification(SancusModuleInfo callerInfo,
+                                 SancusModuleInfo calleeInfo,
                                  Module& m);
     GlobalVariable* getSymbolAddress(Module& m, StringRef name);
 
-    typedef std::map<const GlobalValue*, SpmInfo> InfoMap;
-    InfoMap spmInfo;
+    typedef std::map<const GlobalValue*, SancusModuleInfo> InfoMap;
+    InfoMap modulesInfo;
 
     typedef std::vector<Function*> EntryList;
     EntryList entries;
@@ -56,19 +57,20 @@ struct SpmCreator : ModulePass
 
 }
 
-char SpmCreator::ID = 0;
-static RegisterPass<SpmCreator> SPM("create-spm", "Create SPM");
+char SancusModuleCreator::ID = 0;
+static RegisterPass<SancusModuleCreator> SPM("create-sm",
+                                             "Create Sancus module");
 
-SpmCreator::SpmCreator() : ModulePass(ID)
+SancusModuleCreator::SancusModuleCreator() : ModulePass(ID)
 {
 }
 
-void SpmCreator::getAnalysisUsage(AnalysisUsage& au) const
+void SancusModuleCreator::getAnalysisUsage(AnalysisUsage& au) const
 {
     au.addRequired<AnnotationParser>();
 }
 
-bool SpmCreator::runOnModule(Module& m)
+bool SancusModuleCreator::runOnModule(Module& m)
 {
     LLVMContext& ctx = m.getContext();
     wordTy = TypeBuilder<types::i<16>, true>::get(ctx);
@@ -91,14 +93,22 @@ bool SpmCreator::runOnModule(Module& m)
     return modified;
 }
 
-bool SpmCreator::handleFunction(Function& f)
+bool SancusModuleCreator::handleFunction(Function& f)
 {
+    // HACK: clang fails to add the needed attributes to main(), add them here
+    if (f.getName() == "main")
+    {
+        f.setSection(".init9");
+        f.setAlignment(2);
+        return true;
+    }
+
     if (f.isIntrinsic() || f.isDeclaration())
         return false;
 
     bool modified = false;
 
-    SpmInfo info = getSpmInfo(&f);
+    SancusModuleInfo info = getSancusModuleInfo(&f);
     if (info.isInSpm)
     {
         f.setSection(info.getTextSection());
@@ -140,7 +150,7 @@ bool SpmCreator::handleFunction(Function& f)
         else if (callee->isIntrinsic())
             continue;
 
-        if (Instruction* v = getVerification(info, getSpmInfo(callee),
+        if (Instruction* v = getVerification(info, getSancusModuleInfo(callee),
                                              *f.getParent()))
         {
             verifications[inst] = v;
@@ -159,9 +169,9 @@ bool SpmCreator::handleFunction(Function& f)
     return modified;
 }
 
-bool SpmCreator::handleData(GlobalVariable& gv)
+bool SancusModuleCreator::handleData(GlobalVariable& gv)
 {
-    SpmInfo info = getSpmInfo(&gv);
+    SancusModuleInfo info = getSancusModuleInfo(&gv);
     if (!info.isInSpm)
         return false;
 
@@ -172,7 +182,7 @@ bool SpmCreator::handleData(GlobalVariable& gv)
     return true;
 }
 
-void SpmCreator::createFunctionTable(Module& m)
+void SancusModuleCreator::createFunctionTable(Module& m)
 {
     LLVMContext& ctx = m.getContext();
 
@@ -193,7 +203,7 @@ void SpmCreator::createFunctionTable(Module& m)
     std::map<std::string, std::vector<Constant*>> funcsEls;
     for (Function* f : entries)
     {
-        SpmInfo info = getSpmInfo(f);
+        SancusModuleInfo info = getSancusModuleInfo(f);
         assert(info.isEntry && "Asking function table for non-entry");
 
         // initializer for the SpmFunctionInfo struct
@@ -219,11 +229,11 @@ void SpmCreator::createFunctionTable(Module& m)
     }
 }
 
-Function* SpmCreator::getStub(Function& caller, Function& callee)
+Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
 {
     Module* m = caller.getParent();
-    SpmInfo callerInfo = getSpmInfo(&caller);
-    SpmInfo calleeInfo = getSpmInfo(&callee);
+    SancusModuleInfo callerInfo = getSancusModuleInfo(&caller);
+    SancusModuleInfo calleeInfo = getSancusModuleInfo(&callee);
 
     auto pair = std::make_pair(callerInfo.name, &callee);
     StubMap::iterator it = stubs.find(pair);
@@ -325,14 +335,14 @@ Function* SpmCreator::getStub(Function& caller, Function& callee)
     return stub;
 }
 
-SpmInfo SpmCreator::getSpmInfo(const GlobalValue* gv)
+SancusModuleInfo SancusModuleCreator::getSancusModuleInfo(const GlobalValue* gv)
 {
-    auto it = spmInfo.find(gv);
-    if (it != spmInfo.end())
+    auto it = modulesInfo.find(gv);
+    if (it != modulesInfo.end())
         return it->second;
 
     AnnotationParser& ap = getAnalysis<AnnotationParser>();
-    SpmInfo info;
+    SancusModuleInfo info;
     for (const Annotation& annot : ap.getAnnotations(gv))
     {
         auto pair = annot.value.split(':');
@@ -352,11 +362,11 @@ SpmInfo SpmCreator::getSpmInfo(const GlobalValue* gv)
         info.isInSpm = true;
     }
 
-    spmInfo.insert({gv, info});
+    modulesInfo.insert({gv, info});
     return info;
 }
 
-Function* SpmCreator::getCalledFunction(CallSite cs)
+Function* SancusModuleCreator::getCalledFunction(CallSite cs)
 {
     assert(cs && "Not a call site");
 
@@ -375,8 +385,8 @@ Function* SpmCreator::getCalledFunction(CallSite cs)
     return nullptr;
 }
 
-Instruction* SpmCreator::getVerification(SpmInfo callerInfo,
-                                         SpmInfo calleeInfo,
+Instruction* SancusModuleCreator::getVerification(SancusModuleInfo callerInfo,
+                                         SancusModuleInfo calleeInfo,
                                          Module& m)
 {
     if (!callerInfo.isInSpm ||
@@ -410,7 +420,7 @@ Instruction* SpmCreator::getVerification(SpmInfo callerInfo,
     return CallInst::Create(verifyStub, args);
 }
 
-GlobalVariable* SpmCreator::getSymbolAddress(Module& m, StringRef name)
+GlobalVariable* SancusModuleCreator::getSymbolAddress(Module& m, StringRef name)
 {
     if (GlobalVariable* gv = m.getGlobalVariable(name))
         return gv;

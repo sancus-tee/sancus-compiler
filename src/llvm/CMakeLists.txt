@@ -2,11 +2,11 @@ include(CompilerConfig)
 include(LLVMConfig)
 
 set(SRC
-    SpmCreator.cpp
+    SancusModuleCreator.cpp
     FunctionCcInfo.cpp
-    SpmInfo.cpp
+    SancusModuleInfo.cpp
     AnnotationParser.cpp
 )
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-add_llvm_loadable_module(SpmCreator ${SRC})
+add_llvm_loadable_module(SancusModuleCreator ${SRC})
