@@ -50,7 +50,7 @@ parser.add_argument('--spm-stack-size',
                     default=256,
                     metavar='size')
 
-args, ld_args = parser.parse_known_args()
+args, cli_ld_args = parser.parse_known_args()
 set_args(args)
 
 # find all defined SPMs
@@ -273,14 +273,14 @@ if not out_file:
 
 info('Using output file ' + out_file)
 
-ld_args += ['-L', mcu_ldscripts_path, '-L', msp_paths['lib'],
+ld_args = ['-L', mcu_ldscripts_path, '-L', msp_paths['lib'],
             '-T', ldscript_name, '-o', out_file]
 ld_libs = ['-lsancus-sm-support']
 
 if args.standalone:
     ld_libs += ['-lsancus-host-support']
-    ld_args += args.in_files + ld_libs
+    ld_args += args.in_files + cli_ld_args + ld_libs
     call_prog('msp430-gcc', ld_args)
 else:
-    ld_args += ['-r'] + args.in_files + ld_libs
+    ld_args += ['-r'] + args.in_files + cli_ld_args + ld_libs
     call_prog('msp430-ld', ld_args)

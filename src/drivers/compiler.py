@@ -10,9 +10,6 @@ def is_assembly(file):
 
 parser = argparse.ArgumentParser(description='Sancus module compiler.',
                                  parents=[get_common_parser()])
-parser.add_argument('--spm-id',
-                    help='ID for the SPM',
-                    metavar='id')
 parser.add_argument('-c',
                     dest='compile_only',
                     help='Compile and assemble, but do not link',
