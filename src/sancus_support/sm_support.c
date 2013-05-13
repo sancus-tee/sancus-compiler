@@ -1,6 +1,6 @@
 #include "sm_support.h"
 
-int protect_spm(struct Spm* spm)
+int protect_sm(struct SancusModule* sm)
 {
     asm("mov %1, r11\n\t"
         "mov %2, r12\n\t"
@@ -9,12 +9,12 @@ int protect_spm(struct Spm* spm)
         "mov %5, r15\n\t"
         ".word 0x1381\n\t"
         "mov r15, %0"
-        : "=m"(spm->id)
-        : "m"(spm->vendor_id),
-          "m"(spm->public_start), "m"(spm->public_end),
-          "m"(spm->secret_start), "m"(spm->secret_end)
+        : "=m"(sm->id)
+        : "m"(sm->vendor_id),
+          "m"(sm->public_start), "m"(sm->public_end),
+          "m"(sm->secret_start), "m"(sm->secret_end)
         : "r11", "r12", "r13", "r14", "r15");
 
-    return spm->id != 0;
+    return sm->id != 0;
 }
 
