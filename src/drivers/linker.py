@@ -44,7 +44,7 @@ parser.add_argument('--rom-size',
                              '32K', '41K', '48K', '51K', '54K', '55K'],
                     default='48K')
 parser.add_argument('-rdynamic', action='store_true')
-parser.add_argument('--spm-stack-size',
+parser.add_argument('--sm-stack-size',
                     help='Stack size for the module (in bytes)',
                     type=positive_int,
                     default=256,
@@ -206,7 +206,7 @@ for spm in spms:
     text_sections.append(text_section.format(spm, entry_file, exit_file,
                                              '\n    '.join(tables)))
     data_sections.append(data_section.format(spm, '\n    '.join(id_syms),
-                                             args.spm_stack_size))
+                                             args.sm_stack_size))
 
     symbols.append('{} = {};'.format(nentries, len(spms_entries[spm])))
     for idx, entry in enumerate(spms_entries[spm]):

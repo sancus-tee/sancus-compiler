@@ -37,7 +37,7 @@ always_inline void unprotect_sm()
     asm(".word 0x1380");
 }
 
-always_inline sm_id hmac_verify(const char* expected_hmac,
+always_inline sm_id hmac_verify(const void* expected_hmac,
                                 struct SancusModule* sm)
 {
     sm_id ret;
@@ -51,7 +51,7 @@ always_inline sm_id hmac_verify(const char* expected_hmac,
     return ret;
 }
 
-always_inline sm_id hmac_write(char* dst, struct SancusModule* sm)
+always_inline sm_id hmac_write(void* dst, struct SancusModule* sm)
 {
     sm_id ret;
     asm("mov %1, r14\n\t"
