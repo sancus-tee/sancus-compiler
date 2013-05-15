@@ -13,12 +13,12 @@ add_subdirectory(cmake)
 set(CPACK_GENERATOR "DEB")
 
 set(CPACK_PACKAGE_NAME "sancus-compiler")
-set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_VERSION "1.0")
 set(CPACK_PACKAGE_CONTACT "Job Noorman <Job.Noorman@cs.kuleuven.be>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Sancus compiler")
 
 #set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "all")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "python2.7, gcc-msp430")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "python2.7, gcc-msp430, llvm-sancus")
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE
     "http://people.cs.kuleuven.be/~job.noorman/sancus")
 
