@@ -25,7 +25,7 @@ def _gen_lib_call(func):
         if args.debug:
             _print_data(msg)
         ret = '\x00' * 16
-        func(key, msg, len(msg), ret)
+        func(key, msg, ctypes.c_ulonglong(len(msg)), ret)
         return ret.encode('hex') if hex_out else ret
     return lib_call
 
