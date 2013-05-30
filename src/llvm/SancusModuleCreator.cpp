@@ -95,18 +95,18 @@ bool SancusModuleCreator::runOnModule(Module& m)
 
 bool SancusModuleCreator::handleFunction(Function& f)
 {
+    if (f.isIntrinsic() || f.isDeclaration())
+        return false;
+
+    bool modified = false;
+
     // HACK: clang fails to add the needed attributes to main(), add them here
     if (f.getName() == "main")
     {
         f.setSection(".init9");
         f.setAlignment(2);
-        return true;
+        modified = true;
     }
-
-    if (f.isIntrinsic() || f.isDeclaration())
-        return false;
-
-    bool modified = false;
 
     SancusModuleInfo info = getSancusModuleInfo(&f);
     if (info.isInSpm)
