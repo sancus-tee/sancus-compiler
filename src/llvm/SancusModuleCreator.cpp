@@ -40,6 +40,7 @@ struct SancusModuleCreator : ModulePass
                                  SancusModuleInfo calleeInfo,
                                  Module& m);
     GlobalVariable* getSymbolAddress(Module& m, StringRef name);
+    std::string fixSymbolName(const std::string& name);
 
     typedef std::map<const GlobalValue*, SancusModuleInfo> InfoMap;
     InfoMap modulesInfo;
@@ -244,6 +245,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
     std::string stubAsm;
 
     FunctionCcInfo ccInfo(&callee);
+    std::string calleeName = fixSymbolName(callee.getName());
 
     if (callerInfo.name == calleeInfo.name) // call within SPM/unprotected
         stub = &callee;
@@ -258,8 +260,8 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
         }
 
         std::string sectionName = callerInfo.getTextSection();
-        std::string stubName = callerInfo.getCalleeStubName(callee.getName());
-        std::string idxName = calleeInfo.getIndexName(callee.getName());
+        std::string stubName = callerInfo.getCalleeStubName(calleeName);
+        std::string idxName = calleeInfo.getIndexName(calleeName);
         std::string brName = calleeInfo.getEntryName();
 
         stubAsm = Twine("\t.align 2\n"
@@ -285,19 +287,19 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
     else // call SPM -> SPM/unprotected
     {
         std::string sectionName = callerInfo.getTextSection();
-        std::string stubName = callerInfo.getCalleeStubName(callee.getName());
+        std::string stubName = callerInfo.getCalleeStubName(calleeName);
         Twine regsUsage = Twine(ccInfo.argRegsUsage);
         std::string brName = callerInfo.getExitName();
 
         std::string idxName, entryName;
         if (!calleeInfo.name.empty()) // call to SPM
         {
-            idxName = calleeInfo.getIndexName(callee.getName());
+            idxName = calleeInfo.getIndexName(calleeName);
             entryName = calleeInfo.getEntryName();
         }
         else
         {
-            idxName = callee.getName();
+            idxName = calleeName;
             entryName = "__unprotected_entry";
         }
 
@@ -323,7 +325,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
                             callee.isVarArg()))
     {
         report_fatal_error("Call from " + caller.getName() + " to " +
-                           callee.getName() + " uses the stack for parameter "
+                           calleeName + " uses the stack for parameter "
                            "and/or return value passing. This is not "
                            "supported for SPMs.");
     }
@@ -358,7 +360,7 @@ SancusModuleInfo SancusModuleCreator::getSancusModuleInfo(const GlobalValue* gv)
         if (info.isInSpm)
             report_fatal_error("Multiple SPM annotations on " + gv->getName());
 
-        info.name = pair.second;
+        info.name = fixSymbolName(pair.second);
         info.isInSpm = true;
     }
 
@@ -429,3 +431,16 @@ GlobalVariable* SancusModuleCreator::getSymbolAddress(Module& m, StringRef name)
                               GlobalVariable::ExternalLinkage,
                               /*Initializer=*/nullptr, name);
 }
+
+
+std::string SancusModuleCreator::fixSymbolName(const std::string& name)
+{
+    assert(!name.empty() && "Empty symbol name?");
+
+    // remove the \01 prefix that is used to mangle __asm declarations
+    if (name.front() == '\01')
+        return name.substr(1);
+    else
+        return name;
+}
+
