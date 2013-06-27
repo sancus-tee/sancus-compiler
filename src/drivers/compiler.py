@@ -33,9 +33,10 @@ else:
 info('Using output file ' + out_file)
 
 msp_paths = get_msp_paths()
-include_path = msp_paths['include']
-cc_args += ['-I' + include_path]
-info('Using include path: ' + include_path)
+gcc_include = msp_paths['gcc_include']
+libc_include = msp_paths['libc_include']
+cc_args += ['-I' + gcc_include, '-I' + libc_include]
+info('Using include paths: {}, {}'.format(gcc_include, libc_include))
 
 if args.mcu:
     mcu_define = '__' + args.mcu.upper() + '__'

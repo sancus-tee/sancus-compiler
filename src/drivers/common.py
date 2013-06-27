@@ -21,9 +21,15 @@ def get_msp_paths():
                      get_output=True)
     base = os.path.abspath(os.path.dirname(base + '/../../..'))
     info('Found MSP430 install directory: ' + base)
-    include = base + '/include'
+    libc_include = base + '/include'
     lib = base + '/lib'
     ldscripts = lib + '/ldscripts'
+
+    gcc_base = call_prog('msp430-gcc', ['-print-file-name=include'],
+                         get_output=True)
+    gcc_base = os.path.abspath(os.path.dirname(gcc_base))
+    info('Found MSP430 GCC install directory: ' + gcc_base)
+    gcc_include = gcc_base + "/include"
     return locals()
 
 
