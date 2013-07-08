@@ -14,6 +14,11 @@ parser.add_argument('-c',
                     dest='compile_only',
                     help='Compile and assemble, but do not link',
                     action='store_true')
+parser.add_argument('-O',
+                    dest='optimization',
+                    help='Set optimization level',
+                    choices=['0', '1', '2', '3'],
+                    default='0')
 
 args, cc_args = parser.parse_known_args()
 set_args(args)
@@ -46,6 +51,9 @@ else:
 cc_args += ['-D' + mcu_define]
 info('Using MCU define ' + mcu_define)
 
+optimization = '-O' + args.optimization
+cc_args.append(optimization)
+
 as_args = []
 
 if is_assembly(in_file):
@@ -63,7 +71,7 @@ else:
     call_prog('opt', opt_args)
 
     assembly = get_tmp('.s')
-    llc_args = ['-o', assembly, opt_bc]
+    llc_args = [optimization, '-o', assembly, opt_bc]
     call_prog('llc', llc_args)
 
 as_args += ['-c', '-o', out_file, assembly]
