@@ -64,6 +64,30 @@ always_inline sm_id hmac_write(void* dst, struct SancusModule* sm)
     return ret;
 }
 
+always_inline sm_id hmac_verify_caller(const void* expected_hmac)
+{
+    sm_id ret;
+    asm("mov %1, r15\n\t"
+        ".word 0x1386\n\t"
+        "mov r15, %0"
+        : "=m"(ret)
+        : "r"(expected_hmac)
+        : "r15");
+    return ret;
+}
+
+always_inline sm_id hmac_write_caller(void* dst)
+{
+    sm_id ret;
+    asm("mov %1, r15\n\t"
+        ".word 0x1387\n\t"
+        "mov r15, %0"
+        : "=m"(ret)
+        : "r"(dst)
+        : "r15");
+    return ret;
+}
+
 always_inline sm_id hmac_sign(void* dest, const void* src, size_t n)
 {
     sm_id ret;
