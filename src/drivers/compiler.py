@@ -7,6 +7,15 @@ def is_assembly(file):
     _, ext = os.path.splitext(file)
     return ext.lower() == '.s'
 
+# HACK: some build systems (e.g., CMake) insist on using the compiler for
+# linking. Since I don't want to support both compiling and linking through a
+# single executable right now, the --do-ld flag is added to indicate that the
+# linker should be called
+if '--do-ld' in sys.argv:
+    args = sys.argv[1:]
+    args.remove('--do-ld')
+    call_prog('sancus-ld', args)
+    sys.exit(0)
 
 parser = argparse.ArgumentParser(description='Sancus module compiler.',
                                  parents=[get_common_parser()])
