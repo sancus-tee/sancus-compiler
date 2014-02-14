@@ -3,6 +3,11 @@
 
 #include <cstdint>
 
+// #define _PrintState_
+
+#define SW_SECURITY   64
+#define SW_RATE       16
+#define SW_RATE_BYTES (SW_RATE / 8)
 
 #if		defined(_SPONGENT088080008_)
 #define rate		8
@@ -94,11 +99,27 @@
 #define hashsize	256
 #define nRounds		385
 #define version		256512256
+
+#else
+#define rate        (SW_RATE + 2)
+#define MIN_WIDTH   (2 * SW_SECURITY + rate)
+#define WIDTH       (MIN_WIDTH <= 64 ? 64 : ((MIN_WIDTH + 7) & -8))
+#define capacity    (WIDTH - rate)
+#define hashsize    SW_SECURITY
+#define nRounds     70
+#define version     1281288
 #endif
 
-#define R_SizeInBytes 	(rate / 8)
+#define BITS_TO_BYTES(x) (x / 8 + (x % 8 != 0))
+
+#define R_SizeInBytes 	BITS_TO_BYTES(rate)
 #define nBits 			(capacity + rate)
 #define nSBox 			nBits/8
+#define KEY_SIZE hashsize
+#define TAG_SIZE hashsize
+#define TAG_SIZE_BYTES (TAG_SIZE / 8)
+// #define WRAP_RHO ((rate - 3) / 8 * 8)
+// #define WRAP_RHO_BYTES (WRAP_RHO / 8)
 
 typedef unsigned char 		BitSequence;
 typedef unsigned long long 	DataLength;
@@ -110,7 +131,7 @@ typedef uint8_t  bit8;
 
 #define GET_BIT(x,y) (x >> y) & 0x1
 
-typedef enum { SUCCESS = 0, FAIL = 1, BAD_HASHBITLEN = 2 } HashReturn;
+typedef enum { SUCCESS = 0, FAIL = 1, BAD_HASHBITLEN = 2, BAD_TAG = 3 } HashReturn;
 
 typedef struct {
  	BitSequence value[nSBox];					/* current Spongent state */
@@ -132,16 +153,21 @@ void Permute(hashState *state);
 bit16 lCounter(bit16 lfsr);
 bit16 retnuoCl(bit16 lfsr);
 
+HashReturn SpongentWrap(const BitSequence* key,
+                        const BitSequence* ad, DataLength adBitLength,
+                        const BitSequence* input, DataLength bitLength,
+                        BitSequence* output,
+                        BitSequence* tag,
+                        bool unwrap = false);
+
+HashReturn SpongentUnwrap(const BitSequence* key,
+                          const BitSequence* ad, DataLength adBitLength,
+                          const BitSequence* input, DataLength bitLength,
+                          BitSequence* output,
+                          const BitSequence* expectedTag);
+
+HashReturn SpongentMac(const BitSequence* key,
+                       const BitSequence* input, DataLength bitLength,
+                       BitSequence* mac);
+
 #endif /* spongent.h */
-
-
-
-
-
-
-
-
-
-
-
-

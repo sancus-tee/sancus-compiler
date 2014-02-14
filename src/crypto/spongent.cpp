@@ -11,6 +11,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <algorithm>
 #include "spongent.h"
 
 /* Spongent S-box */
@@ -198,25 +199,27 @@ void Permute(hashState *state)
 
 //--------------------------------------------------------------------------------------------
 
-HashReturn Init(hashState *state, BitSequence *hashval )
+HashReturn Init(hashState *state, BitSequence *hashval = nullptr)
 {
 	/* check hashsize and initialize accordingly */
-	switch( hashsize )
-	{
-		case 88:		break;
-		case 128:		break;
-		case 160:		break;
-		case 224:		break;
-		case 256:		break;
-			
-		default:
-			return BAD_HASHBITLEN;
-	}
+// 	switch( hashsize )
+// 	{
+// 		case 88:		break;
+// 		case 128:		break;
+// 		case 160:		break;
+// 		case 224:		break;
+// 		case 256:		break;
+//
+// 		default:
+// 			return BAD_HASHBITLEN;
+// 	}
 	
 	memset(state->value, 0, nSBox);	
 	state->hashbitlen = 0;
 	state->remainingbitlen = 0;
-	memset(hashval, 0, hashsize/8);
+
+    if (hashval != nullptr)
+        memset(hashval, 0, hashsize/8);
 	
 	return SUCCESS;
 }
@@ -258,13 +261,13 @@ HashReturn Pad(hashState *state)
         
         /* make unoccupied bits 0 */
         if(bitpos)
-                state->messageblock[byteind] &= 0xFF<<(8-bitpos);       
+            state->messageblock[byteind] &= 0xff >> (8 - bitpos);
 
         /* add single 1-bit */
-        if(bitpos){             
-                state->messageblock[byteind] |= 0x80>>(bitpos);}
-        else{
-                state->messageblock[byteind] = 0x80;}
+        if(bitpos)
+            state->messageblock[byteind] |= 0x01 << bitpos;
+        else
+            state->messageblock[byteind] = 0x01;
         
         /* add 0-bits until we have rate bits */
         while(byteind!=R_SizeInBytes)
@@ -342,6 +345,177 @@ HashReturn SpongentHash(const BitSequence *data, DataLength databitlen, BitSeque
 #endif		
 	
 	return SUCCESS;
+}
+
+HashReturn Duplexing(hashState* state,
+                     BitSequence* block,
+                     DataLength blockBitLength,
+                     BitSequence* out = nullptr,
+                     DataLength outBitsLength = SW_RATE)
+{
+    std::copy_n(block, BITS_TO_BYTES(blockBitLength), state->messageblock);
+    state->remainingbitlen = blockBitLength;
+    HashReturn ret = Pad(state);
+
+    if (ret != SUCCESS)
+        return ret;
+
+    ret = Absorb(state);
+
+    if (ret != SUCCESS)
+        return ret;
+
+    if (out != nullptr)
+        std::copy_n(state->value, outBitsLength / 8, out);
+
+    return SUCCESS;
+}
+
+HashReturn SpongentWrap(const BitSequence* key,
+                        const BitSequence* ad, DataLength adBitLength,
+                        const BitSequence* input, DataLength bitLength,
+                        BitSequence* output,
+                        BitSequence* tag,
+                        bool unwrap)
+{
+    if (adBitLength % 8 != 0 || bitLength % 8 != 0)
+    {
+        fprintf(stderr, "Messages containing partial bytes not supported\n");
+        return FAIL;
+    }
+
+    hashState state;
+    HashReturn ret = Init(&state);
+
+    if (ret != SUCCESS)
+        return ret;
+
+    BitSequence block[R_SizeInBytes];
+    BitSequence duplexOut[R_SizeInBytes];
+    DataLength bitsLeft = KEY_SIZE;
+
+    while (bitsLeft > SW_RATE)
+    {
+        std::copy_n(key, SW_RATE_BYTES, block);
+        block[SW_RATE_BYTES] = 0x01;
+        ret = Duplexing(&state, block, SW_RATE + 1);
+
+        if (ret != SUCCESS)
+            return ret;
+
+        bitsLeft -= SW_RATE;
+        key += SW_RATE_BYTES;
+    }
+
+    std::copy_n(key, bitsLeft / 8, block);
+    block[bitsLeft / 8] = 0x00;
+    ret = Duplexing(&state, block, bitsLeft + 1);
+
+    if (ret != SUCCESS)
+        return ret;
+
+    bitsLeft = adBitLength;
+
+    while (bitsLeft > SW_RATE)
+    {
+        std::copy_n(ad, SW_RATE_BYTES, block);
+        block[SW_RATE_BYTES] = 0x00;
+        ret = Duplexing(&state, block, SW_RATE + 1);
+
+        if (ret != SUCCESS)
+            return ret;
+
+        bitsLeft -= SW_RATE;
+        ad += SW_RATE_BYTES;
+    }
+
+    std::copy_n(ad, bitsLeft / 8, block);
+    block[bitsLeft / 8] = 0x01;
+    ret = Duplexing(&state, block, bitsLeft + 1, duplexOut);
+
+    if (ret != SUCCESS)
+        return ret;
+
+    DataLength firstBlockLength =
+        std::min(bitLength, (DataLength)SW_RATE) / 8;
+
+    for (DataLength i = 0; i < firstBlockLength; i++)
+        output[i] = input[i] ^ duplexOut[i];
+
+    bitsLeft = bitLength;
+
+    while (bitsLeft > SW_RATE)
+    {
+        std::copy_n(unwrap ? output : input, SW_RATE_BYTES, block);
+        block[SW_RATE_BYTES] = 0x01;
+        HashReturn ret = Duplexing(&state, block, SW_RATE + 1, duplexOut);
+
+        if (ret != SUCCESS)
+            return ret;
+
+        bitsLeft -= SW_RATE;
+        input += SW_RATE_BYTES;
+        output += SW_RATE_BYTES;
+
+        DataLength blockLength = std::min(bitsLeft, (DataLength)SW_RATE) / 8;
+
+        for (DataLength i = 0; i < blockLength; i++)
+            output[i] = input[i] ^ duplexOut[i];
+    }
+
+    std::copy_n(unwrap ? output : input, bitsLeft / 8, block);
+    block[bitsLeft / 8] = 0x00;
+    ret = Duplexing(&state, block, bitsLeft + 1,
+                    tag, std::min((DataLength)TAG_SIZE, (DataLength)SW_RATE));
+
+    if (ret != SUCCESS)
+        return ret;
+
+    DataLength tagBitsDone = SW_RATE;
+    tag += SW_RATE_BYTES;
+    std::fill_n(block, sizeof(block), 0x00);
+
+    while (tagBitsDone < TAG_SIZE)
+    {
+        ret = Duplexing(&state, block, 0, tag,
+                        std::min(TAG_SIZE - tagBitsDone, (DataLength)SW_RATE));
+
+        if (ret != SUCCESS)
+            return ret;
+
+        tagBitsDone += SW_RATE;
+        tag += SW_RATE_BYTES;
+    }
+
+    return SUCCESS;
+}
+
+HashReturn SpongentUnwrap(const BitSequence* key,
+                          const BitSequence* ad, DataLength adBitLength,
+                          const BitSequence* input, DataLength bitLength,
+                          BitSequence* output,
+                          const BitSequence* expectedTag)
+{
+    BitSequence tag[TAG_SIZE_BYTES];
+    HashReturn ret = SpongentWrap(key,
+                                  ad, adBitLength,
+                                  input, bitLength,
+                                  output, tag, /*unwrap=*/true);
+
+    if (ret != SUCCESS)
+        return ret;
+
+    if (!std::equal(std::begin(tag), std::end(tag), expectedTag))
+        return BAD_TAG;
+
+    return SUCCESS;
+}
+
+HashReturn SpongentMac(const BitSequence* key,
+                       const BitSequence* input, DataLength bitLength,
+                       BitSequence* mac)
+{
+    return SpongentWrap(key, input, bitLength, nullptr, 0, nullptr, mac);
 }
 
 //--------------------------------------------------------------------------------------------

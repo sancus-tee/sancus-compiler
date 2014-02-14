@@ -1,3 +1,0 @@
-#!/bin/bash
-
-@PYTHON_EXECUTABLE@ @FULL_INSTALL_DATA_PATH@/hmac.py $@

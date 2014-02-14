@@ -4,22 +4,22 @@
     .type __spm_verify,@function
 
     ; r13: address of stored ID
-    ; r14: address of an SPM
-    ; r15: address of expected HMAC
+    ; r14: address of an SM
+    ; r15: address of expected tag
 __spm_verify:
     mov 0(r13), r12
     cmp #0x0000, r12
-    jeq .Lhmac
+    jeq .Ltag
 
-    ; we have a stored ID, check if it  matches with the SPM
+    ; we have a stored ID, check if it  matches with the SM
     mov r14, r15
-    .word 0x1385
+    .word 0x1386
     cmp r12, r15
     jne .Lexit
     ret
 
-.Lhmac:
-    ; we don't have an ID yet, calculate HMAC
+.Ltag:
+    ; we don't have an ID yet, calculate tag
     .word 0x1382
     cmp #0x0000, r15
     jeq .Lexit

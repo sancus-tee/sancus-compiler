@@ -3,12 +3,12 @@ find_python_module(elftools)
 
 configure_file(sancus-cc.in sancus-cc @ONLY)
 configure_file(sancus-ld.in sancus-ld @ONLY)
-configure_file(sancus-hmac.in sancus-hmac @ONLY)
+configure_file(sancus-crypto.in sancus-crypto @ONLY)
 
 set(PROGS
     ${CMAKE_CURRENT_BINARY_DIR}/sancus-cc
     ${CMAKE_CURRENT_BINARY_DIR}/sancus-ld
-    ${CMAKE_CURRENT_BINARY_DIR}/sancus-hmac
+    ${CMAKE_CURRENT_BINARY_DIR}/sancus-crypto
 )
 
 install(PROGRAMS ${PROGS} DESTINATION bin)
@@ -16,7 +16,7 @@ install(PROGRAMS ${PROGS} DESTINATION bin)
 set(FILES
     compiler.py
     linker.py
-    hmac.py
+    crypto.py
     common.py
     msp430.x
     memory.x

@@ -28,17 +28,17 @@ struct SancusModule
                                 &__PS(name), &__PE(name),       \
                                 &__SS(name), &__SE(name)}
 
-int protect_sm(struct SancusModule* sm);
+int sancus_enable(struct SancusModule* sm);
 
 #define always_inline static inline __attribute__((always_inline))
 
-always_inline void unprotect_sm()
+always_inline void sancus_disable()
 {
     asm(".word 0x1380");
 }
 
-always_inline sm_id hmac_verify(const void* expected_hmac,
-                                struct SancusModule* sm)
+always_inline sm_id sancus_verify(const void* expected_tag,
+                                  struct SancusModule* sm)
 {
     sm_id ret;
     asm("mov %1, r14\n\t"
@@ -46,59 +46,62 @@ always_inline sm_id hmac_verify(const void* expected_hmac,
         ".word 0x1382\n\t"
         "mov r15, %0"
         : "=m"(ret)
-        : "r"(sm->public_start), "r"(expected_hmac)
+        : "r"(sm->public_start), "r"(expected_tag)
         : "r14", "r15");
     return ret;
 }
 
-always_inline sm_id hmac_write(void* dst, struct SancusModule* sm)
+always_inline sm_id sancus_verify_caller(const void* expected_tag)
 {
     sm_id ret;
-    asm("mov %1, r14\n\t"
-        "mov %2, r15\n\t"
+    asm("mov %1, r15\n\t"
         ".word 0x1383\n\t"
         "mov r15, %0"
         : "=m"(ret)
-        : "r"(sm->public_start), "r"(dst)
-        : "r14", "r15");
-    return ret;
-}
-
-always_inline sm_id hmac_verify_caller(const void* expected_hmac)
-{
-    sm_id ret;
-    asm("mov %1, r15\n\t"
-        ".word 0x1386\n\t"
-        "mov r15, %0"
-        : "=m"(ret)
-        : "r"(expected_hmac)
+        : "r"(expected_tag)
         : "r15");
     return ret;
 }
 
-always_inline sm_id hmac_write_caller(void* dst)
+always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
+                                const void* body, size_t body_len,
+                                void* cipher, void* tag)
 {
     sm_id ret;
-    asm("mov %1, r15\n\t"
-        ".word 0x1387\n\t"
-        "mov r15, %0"
-        : "=m"(ret)
-        : "r"(dst)
-        : "r15");
-    return ret;
-}
-
-always_inline sm_id hmac_sign(void* dest, const void* src, size_t n)
-{
-    sm_id ret;
-    asm("mov %1, r13\n\t"
-        "mov %2, r14\n\t"
-        "mov %3, r15\n\t"
+    asm("mov %1, r10\n\t"
+        "mov %2, r11\n\t"
+        "mov %3, r12\n\t"
+        "mov %4, r13\n\t"
+        "mov %5, r14\n\t"
+        "mov %6, r15\n\t"
         ".word 0x1384\n\t"
         "mov r15, %0"
         : "=m"(ret)
-        : "m"(src), "r"((char*)src + n), "m"(dest)
-        : "r13", "r14", "r15");
+        :"m"(ad), "r"((char*)ad + ad_len),
+         "m"(body), "r"((char*)body + ad_len),
+         "m"(cipher), "m"(tag)
+        : "r10", "r11", "r12", "r13", "r14", "r15");
+    return ret;
+}
+
+always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
+                                  const void* cipher, size_t cipher_len,
+                                  const void* tag, void* body)
+{
+    sm_id ret;
+    asm("mov %1, r10\n\t"
+        "mov %2, r11\n\t"
+        "mov %3, r12\n\t"
+        "mov %4, r13\n\t"
+        "mov %5, r14\n\t"
+        "mov %6, r15\n\t"
+        ".word 0x1385\n\t"
+        "mov r15, %0"
+        : "=m"(ret)
+        :"m"(ad), "r"((char*)ad + ad_len),
+         "m"(cipher), "r"((char*)cipher + cipher_len),
+         "m"(body), "m"(tag)
+        : "r10", "r11", "r12", "r13", "r14", "r15");
     return ret;
 }
 

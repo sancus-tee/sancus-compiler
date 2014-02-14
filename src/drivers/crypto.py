@@ -8,7 +8,9 @@ import re
 
 from elftools.elf.elffile import ELFFile
 
-_lib = ctypes.cdll.LoadLibrary(get_data_path() + '/libhmac-spongent.so')
+KEY_SIZE = 64
+
+_lib = ctypes.cdll.LoadLibrary(get_data_path() + '/libsancus-crypto.so')
 
 def _print_data(data):
     for i, b in enumerate(data):
@@ -20,17 +22,26 @@ def _print_data(data):
     if need_nl:
         print '\n',
 
-def _gen_lib_call(func):
-    def lib_call(key, msg, hex_out=True):
-        if args.debug:
-            _print_data(msg)
-        ret = '\x00' * 16
-        func(key, msg, ctypes.c_ulonglong(len(msg)), ret)
-        return ret.encode('hex') if hex_out else ret
-    return lib_call
 
-hmac = _gen_lib_call(_lib.hmac)
-hkdf = _gen_lib_call(_lib.hkdf)
+def wrap(key, ad, body):
+    cipher = '\x00' * len(body)
+    tag = '\x00' * (KEY_SIZE / 8)
+    ok = _lib.sancus_wrap(key, ad, ctypes.c_ulonglong(len(ad)),
+                          body, ctypes.c_ulonglong(len(body)), cipher, tag)
+    return (cipher, tag) if ok else None
+
+
+def unwrap(key, ad, cipher, tag):
+    body = '\x00' * len(cipher)
+    ok = _lib.sancus_unwrap(key, ad, ctypes.c_ulonglong(len(ad)),
+                            cipher, ctypes.c_ulonglong(len(cipher)), tag, body)
+    return body if ok else None
+
+
+def mac(key, msg):
+    ret = '\x00' * (KEY_SIZE / 8)
+    _lib.sancus_mac(key, msg, ctypes.c_ulonglong(len(msg)), ret)
+    return ret
 
 
 def _get_spm_section(elf_file, spm):
@@ -50,7 +61,7 @@ def _get_symbols(elf_file):
 
 def _int_to_bytes(i):
     assert 0 <= i < 2 ** 16
-    return struct.pack('>H', i)
+    return struct.pack('<H', i)
 
 
 def _parse_hex(hex_str, size=0):
@@ -63,23 +74,37 @@ def _parse_hex(hex_str, size=0):
 
 
 def _parse_key(key_str):
-    return _parse_hex(key_str, 32)
+    return _parse_hex(key_str, KEY_SIZE / 4)
 
 
 def _parse_id(id_str):
-    return _parse_hex(id_str, 4)
+    # id is an integer so should be LE -> reverse the parsed byte array
+    return _parse_hex(id_str, 4)[::-1]
 
 
-def get_spm_key(file, spm, master_key, hex_out=True):
+def _get_sm_identity(file, sm):
     elf_file = ELFFile(file)
-    return hkdf(master_key, _get_spm_section(elf_file, spm).data(), hex_out)
-
-
-def get_spm_hmac(file, spm, key, hex_out=True):
-    elf_file = ELFFile(file)
-    data = _get_spm_section(elf_file, spm).data()
+    identity = _get_spm_section(elf_file, sm).data()
     symbols = _get_symbols(elf_file)
-    prefix = '__spm_{}_'.format(spm)
+    prefix = '__spm_{}_'.format(sm)
+    names = [prefix + s for s in ['public_start', 'public_end',
+                                  'secret_start', 'secret_end']]
+    for name in names:
+        try:
+            identity += _int_to_bytes(symbols[name])
+        except KeyError:
+            fatal_error('Symbol {} not found'.format(name))
+    return identity
+
+def get_sm_key(file, sm, master_key):
+    return mac(master_key, _get_sm_identity(file, sm))
+
+
+def get_sm_mac(file, sm, key):
+    elf_file = ELFFile(file)
+    data = _get_spm_section(elf_file, sm).data()
+    symbols = _get_symbols(elf_file)
+    prefix = '__spm_{}_'.format(sm)
     names = [prefix + s for s in ['public_start', 'public_end',
                                   'secret_start', 'secret_end']]
     for name in names:
@@ -88,10 +113,10 @@ def get_spm_hmac(file, spm, key, hex_out=True):
         except KeyError:
             fatal_error('Symbol {} not found'.format(name))
 
-    return hmac(key, data, hex_out)
+    return mac(key, data)
 
 
-def fill_hmac_sections(file):
+def fill_mac_sections(file):
     elf_file = ELFFile(file)
     keys = {}
     shutil.copy(args.in_file, args.out_file)
@@ -103,16 +128,16 @@ def fill_hmac_sections(file):
                 caller = match.group(1)
                 callee = match.group(2)
                 if not caller in keys:
-                    keys[caller] = get_spm_key(file, caller, args.key, False)
-                    info('Key used for SPM {}: {}'
+                    keys[caller] = get_sm_key(file, caller, args.key)
+                    info('Key used for SM {}: {}'
                              .format(caller, keys[caller].encode('hex')))
 
                 try:
-                    hmac = get_spm_hmac(file, callee, keys[caller], False)
-                    info('HMAC of {} used by {}: {}'
-                            .format(callee, caller, hmac.encode('hex')))
+                    mac = get_sm_mac(file, callee, keys[caller])
+                    info('MAC of {} used by {}: {}'
+                            .format(callee, caller, mac.encode('hex')))
                     out_file.seek(section['sh_offset'])
-                    out_file.write(hmac)
+                    out_file.write(mac)
                 except ValueError:
                     # FIXME: this is a compiler bug workaround
                     warning('Not adding HMAC for call to unknown SPM {}'
@@ -126,25 +151,31 @@ parser.add_argument('--verbose',
 parser.add_argument('--debug',
                     help='Show debug output and keep intermediate files',
                     action='store_true')
-parser.add_argument('--hmac',
-                    help='Generate HMAC for SPM',
-                    metavar='SPM')
-parser.add_argument('--hkdf',
-                    help='Generate derived key for SPM',
-                    metavar='SPM')
+parser.add_argument('--mac',
+                    help='Generate MAC for SM',
+                    metavar='SM')
+parser.add_argument('--gen-sm-key',
+                    help='Generate derived key for SM',
+                    metavar='SM')
 parser.add_argument('--key',
-                    help='128-bit key in hexadecimal format',
+                    help='{}-bit key in hexadecimal format'.format(KEY_SIZE),
                     type=_parse_key,
                     metavar='key',
                     required=True)
-parser.add_argument('--vendor-key',
+parser.add_argument('--gen-vendor-key',
                     help='Generate the vendor key for the given ID',
                     type=_parse_id,
                     metavar='ID')
-parser.add_argument('--signature',
-                    help='Generate a signature of the given data',
+parser.add_argument('--wrap',
+                    help='Wrap the given associated data/body pair',
                     type=_parse_hex,
-                    metavar='data')
+                    nargs=2,
+                    metavar=('AD', 'BODY'))
+parser.add_argument('--unwrap',
+                    help='Wrap the given associated data/cipher/tag triplet',
+                    type=_parse_hex,
+                    nargs=3,
+                    metavar=('AD', 'CIPHER', 'TAG'))
 parser.add_argument('-o',
                     help='Output file',
                     dest='out_file',
@@ -158,23 +189,32 @@ args = parser.parse_args()
 set_args(args)
 
 try:
-    if args.vendor_key:
-        print hkdf(args.key, args.vendor_key)
-    elif args.signature:
-        print hmac(args.key, args.signature)
+    if args.gen_vendor_key:
+        print mac(args.key, args.gen_vendor_key).encode('hex')
+    elif args.wrap:
+        ad, body = args.wrap
+        cipher, tag = wrap(args.key, ad, body)
+        print cipher.encode('hex')
+        print 'Tag:', tag.encode('hex')
+    elif args.unwrap:
+        ad, cipher, tag = args.unwrap
+        body = unwrap(args.key, ad, cipher, tag)
+
+        if body:
+            print body.encode('hex')
+        else:
+            fatal_error('Incorrect tag')
     else:
         with open(args.in_file, 'r') as file:
-            if args.hkdf:
-                print(get_spm_key(file, args.hkdf, args.key))
-            elif args.hmac:
-                print(get_spm_hmac(file, args.hmac, args.key))
+            if args.gen_sm_key:
+                print get_sm_key(file, args.gen_sm_key, args.key).encode('hex')
             else:
                 if not args.out_file:
-                    fatal_error('Requested to fill HMAC sections but no ' +
+                    fatal_error('Requested to fill MAC sections but no ' +
                                 'output file given')
                 else:
-                    fill_hmac_sections(file)
+                    fill_mac_sections(file)
 except IOError as e:
     fatal_error('Cannot open file: ' + str(e))
-#except Exception as e:
-  #fatal_error(str(e))
+except Exception as e:
+  fatal_error(str(e))
