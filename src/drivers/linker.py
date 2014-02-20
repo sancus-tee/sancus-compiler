@@ -6,8 +6,10 @@ import string
 from elftools.elf.elffile import ELFFile
 from elftools.common.exceptions import ELFError
 
+import config
 from common import *
 
+MAC_SIZE = config.SECURITY / 8
 
 def rename_syms_sects(file, sym_map, sect_map):
     args = []
@@ -158,7 +160,7 @@ hmac_section = '''.data.spm.{0}.hmac.{1} :
     . = ALIGN(2);
     __spm_{0}_hmac_{1} = .;
     BYTE(0x00); /* without this, this section will be empty in the binary */
-    . += 15;
+    . += {2} - 1;
   }}'''
 
 if args.standalone:
@@ -190,7 +192,7 @@ for spm in spms:
     id_syms = []
     if spm in spms_calls:
         for callee in spms_calls[spm]:
-            hmac_sections.append(hmac_section.format(spm, callee))
+            hmac_sections.append(hmac_section.format(spm, callee, MAC_SIZE))
             id_syms += ['__spm_{}_id_{} = .;'.format(spm, callee), '. += 2;']
 
         verify_file = rename_syms_sects(get_data_path() + '/sm_verify.o',

@@ -1,114 +1,80 @@
 #ifndef _SPONGENT_H_
 #define _SPONGENT_H_
 
+#include "config.h"
+
 #include <cstdint>
 
 // #define _PrintState_
 
-#define SW_SECURITY   64
 #define SW_RATE       16
 #define SW_RATE_BYTES (SW_RATE / 8)
 
-#if		defined(_SPONGENT088080008_)
-#define rate		8
-#define capacity	80
-#define hashsize	88
-#define nRounds		45
-#define version		88808
+#define MIN_CAPACITY (SW_SECURITY * 2)
+#define MIN_WIDTH    (MIN_CAPACITY + SW_RATE + 2)
 
-#elif	defined(_SPONGENT088176088_)
-#define rate		88
-#define capacity	176
-#define hashsize	88
-#define nRounds		135
-#define version		8817688
+#if MIN_WIDTH <= 88
+#define WIDTH   88
+#define nRounds 45
+#define version 88808
 
-#elif   defined(_SPONGENT128128008_)
-#define rate		8
-#define capacity	128
-#define hashsize	128
-#define nRounds		70
-#define version		1281288
+#elif MIN_WIDTH <= 136
+#define WIDTH   136
+#define nRounds 70
+#define version 1281288
 
-#elif   defined(_SPONGENT128256128_)
-#define rate		128
-#define capacity	256
-#define hashsize	128
-#define nRounds		195
-#define version		128256128
+#elif MIN_WIDTH <= 176
+#define WIDTH   176
+#define nRounds 90
+#define version 16016016
 
-#elif   defined(_SPONGENT160160016_)
-#define rate		16
-#define capacity	160
-#define hashsize	160
-#define nRounds		90
-#define version		16016016
+#elif MIN_WIDTH <= 240
+#define WIDTH   240
+#define nRounds 120
+#define version 16016080
 
-#elif   defined(_SPONGENT160160080_)
-#define rate		80
-#define capacity	160
-#define hashsize	160
-#define nRounds		120
-#define version		16016080
+#elif MIN_WIDTH <= 264
+#define WIDTH   264
+#define nRounds 135
+#define version 8817688
 
-#elif   defined(_SPONGENT160320160_)
-#define rate		160
-#define capacity	320
-#define hashsize	160
-#define nRounds		240
-#define version		160320160
+#elif MIN_WIDTH <= 272
+#define WIDTH   272
+#define nRounds 140
+#define version 25625616
 
-#elif	defined(_SPONGENT224224016_)
-#define rate		16
-#define capacity	224
-#define hashsize	224
-#define nRounds		120
-#define version		22422416
+#elif MIN_WIDTH <= 336
+#define WIDTH   336
+#define nRounds 170
+#define version 224224112
 
-#elif	defined(_SPONGENT224224112_)
-#define rate		112
-#define capacity	224
-#define hashsize	224
-#define nRounds		170
-#define version		224224112
+#elif MIN_WIDTH <= 384
+#define WIDTH   384
+#define nRounds 195
+#define version 256256128
 
-#elif	defined(_SPONGENT224448224_)
-#define rate		224
-#define capacity	448
-#define hashsize	224
-#define nRounds		340
-#define version		224448224
+#elif MIN_WIDTH <= 480
+#define WIDTH   480
+#define nRounds 240
+#define version 160320160
 
-#elif	defined(_SPONGENT256256016_)
-#define rate		16
-#define capacity	256
-#define hashsize	256
-#define nRounds		140
-#define version		25625616
+#elif MIN_WIDTH <= 672
+#define WIDTH   672
+#define nRounds 340
+#define version 224448224
 
-#elif	defined(_SPONGENT256256128_)
-#define rate		128
-#define capacity	256
-#define hashsize	256
-#define nRounds		195
-#define version		256256128
-
-#elif	defined(_SPONGENT256512256_)
-#define rate		256
-#define capacity	512
-#define hashsize	256
-#define nRounds		385
-#define version		256512256
+#elif MIN_WIDTH <= 768
+#define WIDTH   768
+#define nRounds 385
+#define version 256512256
 
 #else
+#error "Security too high"
+#endif
+
 #define rate        (SW_RATE + 2)
-#define MIN_WIDTH   (2 * SW_SECURITY + rate)
-#define WIDTH       (MIN_WIDTH <= 64 ? 64 : ((MIN_WIDTH + 7) & -8))
 #define capacity    (WIDTH - rate)
 #define hashsize    SW_SECURITY
-#define nRounds     70
-#define version     1281288
-#endif
 
 #define BITS_TO_BYTES(x) (x / 8 + (x % 8 != 0))
 
@@ -118,8 +84,6 @@
 #define KEY_SIZE hashsize
 #define TAG_SIZE hashsize
 #define TAG_SIZE_BYTES (TAG_SIZE / 8)
-// #define WRAP_RHO ((rate - 3) / 8 * 8)
-// #define WRAP_RHO_BYTES (WRAP_RHO / 8)
 
 typedef unsigned char 		BitSequence;
 typedef unsigned long long 	DataLength;

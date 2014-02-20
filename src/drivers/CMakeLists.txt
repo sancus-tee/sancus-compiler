@@ -1,6 +1,7 @@
 include(PythonConfig)
 find_python_module(elftools)
 
+configure_file(config.py.in ${CMAKE_CURRENT_SOURCE_DIR}/config.py @ONLY)
 configure_file(sancus-cc.in sancus-cc @ONLY)
 configure_file(sancus-ld.in sancus-ld @ONLY)
 configure_file(sancus-crypto.in sancus-crypto @ONLY)
@@ -14,6 +15,7 @@ set(PROGS
 install(PROGRAMS ${PROGS} DESTINATION bin)
 
 set(FILES
+    config.py
     compiler.py
     linker.py
     crypto.py

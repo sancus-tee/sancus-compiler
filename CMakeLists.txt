@@ -7,6 +7,10 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(INSTALL_DATA_PATH share/sancus-compiler)
 set(FULL_INSTALL_DATA_PATH ${CMAKE_INSTALL_PREFIX}/${INSTALL_DATA_PATH})
 
+if (NOT SECURITY)
+    set(SECURITY 64)
+endif ()
+
 add_subdirectory(src)
 add_subdirectory(cmake)
 

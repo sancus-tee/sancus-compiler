@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import config
 from common import *
 
 import ctypes
@@ -8,7 +9,7 @@ import re
 
 from elftools.elf.elffile import ELFFile
 
-KEY_SIZE = 64
+KEY_SIZE = config.SECURITY
 
 _lib = ctypes.cdll.LoadLibrary(get_data_path() + '/libsancus-crypto.so')
 
