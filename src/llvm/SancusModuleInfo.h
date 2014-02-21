@@ -1,12 +1,12 @@
-#ifndef SPMINFO_H
-#define SPMINFO_H
+#ifndef SANCUSMODULEINFO_H
+#define SANCUSMODULEINFO_H
 
 #include <string>
 
 struct SancusModuleInfo
 {
     std::string name;
-    bool isInSpm = false;
+    bool isInSm = false;
     bool isEntry = false;
 
     std::string getDataSection() const;
@@ -19,7 +19,7 @@ struct SancusModuleInfo
     std::string getVerifyName() const;
     std::string getIndexName(const std::string& entry) const;
     std::string getCalleeIdName(const std::string& callee) const;
-    std::string getCalleeHmacName(const std::string& callee) const;
+    std::string getCalleeMacName(const std::string& callee) const;
     std::string getCalleeStubName(const std::string& callee) const;
 };
 

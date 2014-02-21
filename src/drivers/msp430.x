@@ -76,8 +76,8 @@ SECTIONS
     *(.rodata .rodata.* .gnu.linkonce.r.*)
      . = ALIGN(2);
   }  > REGION_TEXT
-  $spm_text_sections
-  $spm_hmac_sections
+  $sm_text_sections
+  $sm_mac_sections
    _etext = .; /* Past last read-only (loadable) segment */
   .data   :
   {
@@ -86,7 +86,7 @@ SECTIONS
     *(.data .data.* .gnu.linkonce.d.*)
      . = ALIGN(2);
   }  > REGION_DATA AT > REGION_TEXT
-  $spm_data_sections
+  $sm_data_sections
    _edata = . ;  /* Past last read-write (loadable) segment */
    PROVIDE (__data_load_start = LOADADDR(.data) );
    PROVIDE (__data_size = _edata - __data_start );
@@ -190,4 +190,4 @@ SECTIONS
    PROVIDE (__data_end_rom   = _etext + SIZEOF (.data));
 }
 
-$spm_symbols
+$sm_symbols

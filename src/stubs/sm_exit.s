@@ -1,12 +1,12 @@
-    .section ".spm.text"
+    .section ".sm.text"
     .align 2
-    .global __spm_exit
-    .type __spm_exit,@function
+    .global __sm_exit
+    .type __sm_exit,@function
 
     ; r6: ID of entry point or function address to be called
     ; r7: register usage
     ; r8: entry point to call
-__spm_exit:
+__sm_exit:
     ; store and clear callee-save registers
     push r4
     clr  r4
@@ -34,10 +34,10 @@ __spm_exit:
     clr r15
 1:
     ; store sp
-    mov r1, &__spm_sp
+    mov r1, &__sm_sp
 
     ; call the entry point
-    mov #__spm_entry, r7
+    mov #__sm_entry, r7
     br r8
 
     .align 2

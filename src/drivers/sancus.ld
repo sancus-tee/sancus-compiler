@@ -3,13 +3,13 @@ OUTPUT_ARCH("msp430")
 
 SECTIONS
 {
-  $spm_text_sections
-  $spm_hmac_sections
-  $spm_data_sections
+  $sm_text_sections
+  $sm_mac_sections
+  $sm_data_sections
 
   .text : {*(.text) *(.rodata)}
   .data : {*(.data)}
   .bss  : {*(.bss)}
 }
 
-$spm_symbols
+$sm_symbols

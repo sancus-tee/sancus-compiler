@@ -45,11 +45,11 @@ def mac(key, msg):
     return ret
 
 
-def _get_spm_section(elf_file, spm):
-    spm_section = elf_file.get_section_by_name('.text.spm.' + spm)
-    if not spm_section:
-        raise ValueError('No such SPM: ' + spm)
-    return spm_section
+def _get_sm_section(elf_file, sm):
+    sm_section = elf_file.get_section_by_name('.text.sm.' + sm)
+    if not sm_section:
+        raise ValueError('No such SM: ' + sm)
+    return sm_section
 
 
 def _get_symbols(elf_file):
@@ -85,9 +85,9 @@ def _parse_id(id_str):
 
 def _get_sm_identity(file, sm):
     elf_file = ELFFile(file)
-    identity = _get_spm_section(elf_file, sm).data()
+    identity = _get_sm_section(elf_file, sm).data()
     symbols = _get_symbols(elf_file)
-    prefix = '__spm_{}_'.format(sm)
+    prefix = '__sm_{}_'.format(sm)
     names = [prefix + s for s in ['public_start', 'public_end',
                                   'secret_start', 'secret_end']]
     for name in names:
@@ -103,9 +103,9 @@ def get_sm_key(file, sm, master_key):
 
 def get_sm_mac(file, sm, key):
     elf_file = ELFFile(file)
-    data = _get_spm_section(elf_file, sm).data()
+    data = _get_sm_section(elf_file, sm).data()
     symbols = _get_symbols(elf_file)
-    prefix = '__spm_{}_'.format(sm)
+    prefix = '__sm_{}_'.format(sm)
     names = [prefix + s for s in ['public_start', 'public_end',
                                   'secret_start', 'secret_end']]
     for name in names:
@@ -124,7 +124,7 @@ def fill_mac_sections(file):
 
     with open(args.out_file, 'r+') as out_file:
         for section in elf_file.iter_sections():
-            match = re.match(r'.data.spm.(\w+).hmac.(\w+)', section.name)
+            match = re.match(r'.data.sm.(\w+).mac.(\w+)', section.name)
             if match:
                 caller = match.group(1)
                 callee = match.group(2)
@@ -141,7 +141,7 @@ def fill_mac_sections(file):
                     out_file.write(mac)
                 except ValueError:
                     # FIXME: this is a compiler bug workaround
-                    warning('Not adding HMAC for call to unknown SPM {}'
+                    warning('Not adding MAC for call to unknown SM {}'
                                 .format(callee))
 
 # FIXME this should be moved to the common argument parser!

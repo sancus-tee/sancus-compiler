@@ -83,5 +83,5 @@ StringRef AnnotationParser::parseString(Constant* c)
 }
 
 char AnnotationParser::ID = 0;
-static RegisterPass<AnnotationParser> SPM("parse-annotations",
-                                          "Parse annotations");
+static RegisterPass<AnnotationParser> AP("parse-annotations",
+                                         "Parse annotations");

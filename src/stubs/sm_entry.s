@@ -1,16 +1,16 @@
-    .section ".spm.text"
+    .section ".sm.text"
     .align 2
-    .global __spm_entry
-    .type __spm_entry,@function
+    .global __sm_entry
+    .type __sm_entry,@function
 
     ; r6: ID of entry point to be called, 0xffff if returning
     ; r7: return address
-__spm_entry:
+__sm_entry:
     #switch stack
-    mov &__spm_sp, r1
+    mov &__sm_sp, r1
     cmp #0x0, r1
     jne 1f
-    mov #__spm_stack_init, r1
+    mov #__sm_stack_init, r1
 
 1:
     ; check if this is a return
@@ -19,7 +19,7 @@ __spm_entry:
     br #__ret_entry ; defined in exit.s
 1:
     ; check if the given index (r6) is within bounds
-    cmp #__spm_nentries, r6
+    cmp #__sm_nentries, r6
     jhs .Lerror
 
     ; store callee-save registers
@@ -37,9 +37,9 @@ __spm_entry:
     add r11, r6
 
     ; function address
-    mov __spm_table(r6), r11
+    mov __sm_table(r6), r11
 
-    ; call the spm
+    ; call the sm
     call r11
 
     ; restore callee-save registers
@@ -54,7 +54,7 @@ __spm_entry:
     and #0x7ef8, r2
 
     ; clear the return registers which are not used
-    mov 4+__spm_table(r6), r6
+    mov 4+__sm_table(r6), r6
     rra r6
     jc 1f
     clr r12
@@ -67,7 +67,7 @@ __spm_entry:
     clr r15
 
 1:
-    mov r1, &__spm_sp
+    mov r1, &__sm_sp
     mov #0xffff, r6
     br r7
 

@@ -1,4 +1,4 @@
-#define DEBUG_TYPE "spm-creator"
+#define DEBUG_TYPE "sm-creator"
 
 #include "FunctionCcInfo.h"
 

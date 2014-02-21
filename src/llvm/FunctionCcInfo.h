@@ -1,5 +1,5 @@
-#ifndef SPMUTILS_H
-#define SPMUTILS_H
+#ifndef FUNCTIONCCINFO_H
+#define FUNCTIONCCINFO_H
 
 #include <string>
 

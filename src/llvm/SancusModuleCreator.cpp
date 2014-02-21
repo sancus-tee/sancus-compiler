@@ -1,4 +1,4 @@
-#define DEBUG_TYPE "spm-creator"
+#define DEBUG_TYPE "sm-creator"
 
 #include "FunctionCcInfo.h"
 #include "SancusModuleInfo.h"
@@ -59,7 +59,7 @@ struct SancusModuleCreator : ModulePass
 }
 
 char SancusModuleCreator::ID = 0;
-static RegisterPass<SancusModuleCreator> SPM("create-sm",
+static RegisterPass<SancusModuleCreator> SMC("create-sm",
                                              "Create Sancus module");
 
 SancusModuleCreator::SancusModuleCreator() : ModulePass(ID)
@@ -110,7 +110,7 @@ bool SancusModuleCreator::handleFunction(Function& f)
     }
 
     SancusModuleInfo info = getSancusModuleInfo(&f);
-    if (info.isInSpm)
+    if (info.isInSm)
     {
         f.setSection(info.getTextSection());
         modified = true;
@@ -173,7 +173,7 @@ bool SancusModuleCreator::handleFunction(Function& f)
 bool SancusModuleCreator::handleData(GlobalVariable& gv)
 {
     SancusModuleInfo info = getSancusModuleInfo(&gv);
-    if (!info.isInSpm)
+    if (!info.isInSm)
         return false;
 
     if (gv.hasCommonLinkage())
@@ -187,7 +187,7 @@ void SancusModuleCreator::createFunctionTable(Module& m)
 {
     LLVMContext& ctx = m.getContext();
 
-    // struct SpmFunctionInfo
+    // struct SmFunctionInfo
     // {
     //     void* address;
     //     unsigned arg_length;
@@ -198,7 +198,7 @@ void SancusModuleCreator::createFunctionTable(Module& m)
     StructType* funcInfoTy = StructType::get(ctx, funcInfoFields,
                                              /*isPacked=*/true);
 
-    // create a global spm function table for every spm and initialize it
+    // create a global SM function table for every SM and initialize it
     // initializers for the funcs[] array.
     // map from section name to initializer
     std::map<std::string, std::vector<Constant*>> funcsEls;
@@ -207,7 +207,7 @@ void SancusModuleCreator::createFunctionTable(Module& m)
         SancusModuleInfo info = getSancusModuleInfo(f);
         assert(info.isEntry && "Asking function table for non-entry");
 
-        // initializer for the SpmFunctionInfo struct
+        // initializer for the SmFunctionInfo struct
         FunctionCcInfo ccInfo(f);
         Constant* funcFields[] = {ConstantExpr::getBitCast(f, voidPtrTy),
                                   ConstantInt::get(wordTy, ccInfo.argsLength),
@@ -218,7 +218,7 @@ void SancusModuleCreator::createFunctionTable(Module& m)
 
     for (const auto& it : funcsEls)
     {
-        // struct SpmFunctionInfo funcs[];
+        // struct SmFunctionInfo funcs[];
         ArrayType* funcsTy = ArrayType::get(funcInfoTy, it.second.size());
         Constant* funcsInit = ConstantArray::get(funcsTy, it.second);
 
@@ -247,15 +247,15 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
     FunctionCcInfo ccInfo(&callee);
     std::string calleeName = fixSymbolName(callee.getName());
 
-    if (callerInfo.name == calleeInfo.name) // call within SPM/unprotected
+    if (callerInfo.name == calleeInfo.name) // call within SM/unprotected
         stub = &callee;
-    else if (callerInfo.name.empty()) // call unprotected -> SPM
+    else if (callerInfo.name.empty()) // call unprotected -> SM
     {
         if (!calleeInfo.isEntry)
         {
             report_fatal_error("In function " + caller.getName() +
                                ": Calling non-entry function " +
-                               callee.getName() + " of SPM " +
+                               callee.getName() + " of SM " +
                                callerInfo.name);
         }
 
@@ -284,7 +284,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
         stub = Function::Create(callee.getFunctionType(),
                                 Function::ExternalLinkage, stubName, m);
     }
-    else // call SPM -> SPM/unprotected
+    else // call SM -> SM/unprotected
     {
         std::string sectionName = callerInfo.getTextSection();
         std::string stubName = callerInfo.getCalleeStubName(calleeName);
@@ -292,7 +292,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
         std::string brName = callerInfo.getExitName();
 
         std::string idxName, entryName;
-        if (!calleeInfo.name.empty()) // call to SPM
+        if (!calleeInfo.name.empty()) // call to SM
         {
             idxName = calleeInfo.getIndexName(calleeName);
             entryName = calleeInfo.getEntryName();
@@ -327,7 +327,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
         report_fatal_error("Call from " + caller.getName() + " to " +
                            calleeName + " uses the stack for parameter "
                            "and/or return value passing. This is not "
-                           "supported for SPMs.");
+                           "supported for SMs.");
     }
 
     if (!stubAsm.empty())
@@ -351,17 +351,17 @@ SancusModuleInfo SancusModuleCreator::getSancusModuleInfo(const GlobalValue* gv)
         if (pair.second.empty())
             continue;
 
-        if (pair.first == "spm_entry")
+        if (pair.first == "sm_entry")
             info.isEntry = true;
-        else if (pair.first != "spm")
+        else if (pair.first != "sm")
             continue;
 
-        // found SPM annotation, check if it is the only one
-        if (info.isInSpm)
-            report_fatal_error("Multiple SPM annotations on " + gv->getName());
+        // found SM annotation, check if it is the only one
+        if (info.isInSm)
+            report_fatal_error("Multiple SM annotations on " + gv->getName());
 
         info.name = fixSymbolName(pair.second);
-        info.isInSpm = true;
+        info.isInSm = true;
     }
 
     modulesInfo.insert({gv, info});
@@ -391,8 +391,8 @@ Instruction* SancusModuleCreator::getVerification(SancusModuleInfo callerInfo,
                                          SancusModuleInfo calleeInfo,
                                          Module& m)
 {
-    if (!callerInfo.isInSpm ||
-        !calleeInfo.isInSpm ||
+    if (!callerInfo.isInSm ||
+        !calleeInfo.isInSm ||
         callerInfo.name == calleeInfo.name)
     {
         return nullptr;
@@ -407,18 +407,18 @@ Instruction* SancusModuleCreator::getVerification(SancusModuleInfo callerInfo,
                                       verifyName, &m);
     }
 
-    // argument 1: address of expected HMAC
-    Value* hmac =
-        getSymbolAddress(m, callerInfo.getCalleeHmacName(calleeInfo.name));
+    // argument 1: address of expected MAC
+    Value* mac =
+        getSymbolAddress(m, callerInfo.getCalleeMacName(calleeInfo.name));
 
-    // argument 2: address of SPM
-    Value* spm = getSymbolAddress(m, calleeInfo.getEntryName());
+    // argument 2: address of SM
+    Value* sm = getSymbolAddress(m, calleeInfo.getEntryName());
 
     // argument 3: address of stored ID
     Value* id =
         getSymbolAddress(m, callerInfo.getCalleeIdName(calleeInfo.name));
 
-    Value* args[] = {hmac, spm, id};
+    Value* args[] = {mac, sm, id};
     return CallInst::Create(verifyStub, args);
 }
 

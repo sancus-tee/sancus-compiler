@@ -1,12 +1,12 @@
-    .section ".spm.text"
+    .section ".sm.text"
     .align 2
-    .global __spm_verify
-    .type __spm_verify,@function
+    .global __sm_verify
+    .type __sm_verify,@function
 
     ; r13: address of stored ID
     ; r14: address of an SM
     ; r15: address of expected tag
-__spm_verify:
+__sm_verify:
     mov 0(r13), r12
     cmp #0x0000, r12
     jeq .Ltag

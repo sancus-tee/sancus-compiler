@@ -55,110 +55,110 @@ parser.add_argument('--sm-stack-size',
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
 
-# find all defined SPMs
-spms = set()
-spms_table_order = {}
-spms_entries = {}
-spms_calls = {}
+# find all defined SMs
+sms = set()
+sms_table_order = {}
+sms_entries = {}
+sms_calls = {}
 
 for file_name in args.in_files:
     try:
         with open(file_name, 'rb') as file:
             elf_file = ELFFile(file)
             for section in elf_file.iter_sections():
-                match = re.match(r'.spm.(\w+).', section.name)
+                match = re.match(r'.sm.(\w+).', section.name)
                 if match:
-                    spms.add(match.group(1))
+                    sms.add(match.group(1))
                     continue
 
-                match = re.match(r'.rela.spm.(\w+).table', section.name)
+                match = re.match(r'.rela.sm.(\w+).table', section.name)
                 if match:
-                    spm_name = match.group(1)
-                    if not spm_name in spms_table_order:
-                        spms_table_order[spm_name] = []
-                        spms_entries[spm_name] = []
+                    sm_name = match.group(1)
+                    if not sm_name in sms_table_order:
+                        sms_table_order[sm_name] = []
+                        sms_entries[sm_name] = []
 
-                    spms_table_order[spm_name].append(file_name)
+                    sms_table_order[sm_name].append(file_name)
 
-                    #find entry points of the SPM in this file
+                    #find entry points of the SM in this file
                     symtab = elf_file.get_section(section['sh_link'])
                     entries = [(rel['r_offset'],
                                 symtab.get_symbol(rel['r_info_sym']).name)
                                     for rel in section.iter_relocations()]
                     entries.sort()
-                    spms_entries[spm_name] += [entry for _, entry in entries]
+                    sms_entries[sm_name] += [entry for _, entry in entries]
                     continue
 
-                match = re.match(r'.rela.spm.(\w+).text', section.name)
+                match = re.match(r'.rela.sm.(\w+).text', section.name)
                 if match:
-                    spm_name = match.group(1)
+                    sm_name = match.group(1)
 
-                    #find call from this SPM to others
+                    #find call from this SM to others
                     symtab = elf_file.get_section(section['sh_link'])
                     for rel in section.iter_relocations():
-                        rel_match = re.match(r'__spm_(\w+)_entry',
+                        rel_match = re.match(r'__sm_(\w+)_entry',
                                              symtab.get_symbol(
                                                  rel['r_info_sym']).name)
                         if rel_match:
-                            assert rel_match.group(1) != spm_name
-                            if not spm_name in spms_calls:
-                                spms_calls[spm_name] = set()
-                            spms_calls[spm_name].add(rel_match.group(1))
+                            assert rel_match.group(1) != sm_name
+                            if not sm_name in sms_calls:
+                                sms_calls[sm_name] = set()
+                            sms_calls[sm_name].add(rel_match.group(1))
                     continue
     except IOError as e:
         fatal_error(str(e))
     except ELFError as e:
-        debug('Not checking {} for SPMs because it is not a valid '
+        debug('Not checking {} for SMs because it is not a valid '
               'ELF file ({})'.format(file_name, e))
 
-if len(spms) > 0:
+if len(sms) > 0:
     info('Found Sancus modules:')
-    for spm in spms:
-        info(' * {}:'.format(spm))
-        if spm in spms_entries:
-            info('  - Entries: {}'.format(', '.join(spms_entries[spm])))
+    for sm in sms:
+        info(' * {}:'.format(sm))
+        if sm in sms_entries:
+            info('  - Entries: {}'.format(', '.join(sms_entries[sm])))
         else:
             info('  - No entries')
-        if spm in spms_calls:
-            info('  - Calls:   {}'.format(', '.join(spms_calls[spm])))
+        if sm in sms_calls:
+            info('  - Calls:   {}'.format(', '.join(sms_calls[sm])))
         else:
             info('  - No calls to other modules')
 else:
     info('No Sancus modules found')
 
-# create output sections for the the SPM to be inserted in the linker script
-text_section = '''.text.spm.{0} :
+# create output sections for the the SM to be inserted in the linker script
+text_section = '''.text.sm.{0} :
   {{
     . = ALIGN(2);
-    __spm_{0}_public_start = .;
+    __sm_{0}_public_start = .;
     {1}
     {2}
-    *(.spm.{0}.text)
+    *(.sm.{0}.text)
     . = ALIGN(2);
-    __spm_{0}_table = .;
+    __sm_{0}_table = .;
     {3}
     . = ALIGN(2);
-    __spm_{0}_public_end = .;
+    __sm_{0}_public_end = .;
   }}'''
 
-data_section = '''.data.spm.{0} :
+data_section = '''.data.sm.{0} :
   {{
     . = ALIGN(2);
-    __spm_{0}_secret_start = .;
-    *(.spm.{0}.data)
+    __sm_{0}_secret_start = .;
+    *(.sm.{0}.data)
     {1}
     . += {2};
-    __spm_{0}_stack_init = .;
-    __spm_{0}_sp = .;
+    __sm_{0}_stack_init = .;
+    __sm_{0}_sp = .;
     . += 2;
     . = ALIGN(2);
-    __spm_{0}_secret_end = .;
+    __sm_{0}_secret_end = .;
   }}'''
 
-hmac_section = '''.data.spm.{0}.hmac.{1} :
+mac_section = '''.data.sm.{0}.mac.{1} :
   {{
     . = ALIGN(2);
-    __spm_{0}_hmac_{1} = .;
+    __sm_{0}_mac_{1} = .;
     BYTE(0x00); /* without this, this section will be empty in the binary */
     . += {2} - 1;
   }}'''
@@ -166,34 +166,34 @@ hmac_section = '''.data.spm.{0}.hmac.{1} :
 if args.standalone:
     text_section += ' > REGION_TEXT'
     data_section += ' > REGION_DATA'
-    hmac_section += ' > REGION_TEXT'
+    mac_section += ' > REGION_TEXT'
 
 text_sections = []
 data_sections = []
-hmac_sections = []
+mac_sections = []
 symbols = []
-for spm in spms:
-    nentries = '__spm_{}_nentries'.format(spm)
-    sym_map = {'__spm_entry'      : '__spm_{}_entry'.format(spm),
-               '__spm_nentries'   : nentries,
-               '__spm_table'      : '__spm_{}_table'.format(spm),
-               '__spm_sp'         : '__spm_{}_sp'.format(spm),
-               '__ret_entry'      : '__spm_{}_ret_entry'.format(spm),
-               '__spm_exit'       : '__spm_{}_exit'.format(spm),
-               '__spm_stack_init' : '__spm_{}_stack_init'.format(spm),
-               '__spm_verify'     : '__spm_{}_verify'.format(spm)}
-    sect_map = {'.spm.text' : '.spm.{}.text'.format(spm)}
+for sm in sms:
+    nentries = '__sm_{}_nentries'.format(sm)
+    sym_map = {'__sm_entry'      : '__sm_{}_entry'.format(sm),
+               '__sm_nentries'   : nentries,
+               '__sm_table'      : '__sm_{}_table'.format(sm),
+               '__sm_sp'         : '__sm_{}_sp'.format(sm),
+               '__ret_entry'      : '__sm_{}_ret_entry'.format(sm),
+               '__sm_exit'       : '__sm_{}_exit'.format(sm),
+               '__sm_stack_init' : '__sm_{}_stack_init'.format(sm),
+               '__sm_verify'     : '__sm_{}_verify'.format(sm)}
+    sect_map = {'.sm.text' : '.sm.{}.text'.format(sm)}
 
     tables = []
-    if spm in spms_table_order:
-        tables = ['{}(.spm.{}.table)'.format(file, spm)
-                      for file in spms_table_order[spm]]
+    if sm in sms_table_order:
+        tables = ['{}(.sm.{}.table)'.format(file, sm)
+                      for file in sms_table_order[sm]]
 
     id_syms = []
-    if spm in spms_calls:
-        for callee in spms_calls[spm]:
-            hmac_sections.append(hmac_section.format(spm, callee, MAC_SIZE))
-            id_syms += ['__spm_{}_id_{} = .;'.format(spm, callee), '. += 2;']
+    if sm in sms_calls:
+        for callee in sms_calls[sm]:
+            mac_sections.append(mac_section.format(sm, callee, MAC_SIZE))
+            id_syms += ['__sm_{}_id_{} = .;'.format(sm, callee), '. += 2;']
 
         verify_file = rename_syms_sects(get_data_path() + '/sm_verify.o',
                                         sym_map, sect_map)
@@ -205,19 +205,19 @@ for spm in spms:
                                   sym_map, sect_map)
     args.in_files += [entry_file, exit_file]
 
-    text_sections.append(text_section.format(spm, entry_file, exit_file,
+    text_sections.append(text_section.format(sm, entry_file, exit_file,
                                              '\n    '.join(tables)))
-    data_sections.append(data_section.format(spm, '\n    '.join(id_syms),
+    data_sections.append(data_section.format(sm, '\n    '.join(id_syms),
                                              args.sm_stack_size))
 
-    symbols.append('{} = {};'.format(nentries, len(spms_entries[spm])))
-    for idx, entry in enumerate(spms_entries[spm]):
-        sym_name = '__spm_{}_entry_{}_idx'.format(spm, entry)
+    symbols.append('{} = {};'.format(nentries, len(sms_entries[sm])))
+    for idx, entry in enumerate(sms_entries[sm]):
+        sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry)
         symbols.append('{} = {};'.format(sym_name, idx))
 
 text_sections = '\n  '.join(text_sections)
 data_sections = '\n  '.join(data_sections)
-hmac_sections = '\n  '.join(hmac_sections)
+mac_sections = '\n  '.join(mac_sections)
 symbols = '\n'.join(symbols)
 
 tmp_ldscripts_path = get_tmp_dir()
@@ -256,10 +256,10 @@ else:
     with open(template_path + '/sancus.ld', 'r') as ldscript:
         template = string.Template(ldscript.read())
 
-contents = template.substitute(spm_text_sections=text_sections,
-                               spm_data_sections=data_sections,
-                               spm_hmac_sections=hmac_sections,
-                               spm_symbols=symbols,
+contents = template.substitute(sm_text_sections=text_sections,
+                               sm_data_sections=data_sections,
+                               sm_mac_sections=mac_sections,
+                               sm_symbols=symbols,
                                mcu_ldscripts_path=mcu_ldscripts_path)
 
 ldscript_name = tmp_ldscripts_path + '/msp430.x'

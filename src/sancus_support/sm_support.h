@@ -1,5 +1,5 @@
-#ifndef SPM_SUPPORT_H
-#define SPM_SUPPORT_H
+#ifndef SM_SUPPORT_H
+#define SM_SUPPORT_H
 
 #include <stddef.h>
 
@@ -17,10 +17,10 @@ struct SancusModule
     void* secret_end;
 };
 
-#define __PS(name) __spm_##name##_public_start
-#define __PE(name) __spm_##name##_public_end
-#define __SS(name) __spm_##name##_secret_start
-#define __SE(name) __spm_##name##_secret_end
+#define __PS(name) __sm_##name##_public_start
+#define __PE(name) __sm_##name##_public_end
+#define __SS(name) __sm_##name##_secret_start
+#define __SE(name) __sm_##name##_secret_end
 
 #define DECLARE_SM(name, vendor_id)                             \
     extern char __PS(name), __PE(name), __SS(name), __SE(name); \
@@ -109,8 +109,8 @@ void __unprotected_entry(void);
 
 #define __ANNOTATE(x) __attribute__((annotate(x)))
 
-#define SM_FUNC(name)  __ANNOTATE("spm:" name)
-#define SM_ENTRY(name) __ANNOTATE("spm_entry:" name) __attribute__((noinline, used))
+#define SM_FUNC(name)  __ANNOTATE("sm:" name)
+#define SM_ENTRY(name) __ANNOTATE("sm_entry:" name) __attribute__((noinline, used))
 #define SM_DATA(name)  SM_FUNC(name)
 
 #endif
