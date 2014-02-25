@@ -39,6 +39,7 @@ bool AnnotationParser::runOnModule(llvm::Module& m)
         // sanity checks
         ConstantExpr* ce = cast<ConstantExpr>(gvOp);
         assert(ce->isCast() || ce->isGEPWithNoNotionalOverIndexing());
+        (void)ce; // remove unused variable warnings in release build
 
         GlobalValue* key = cast<GlobalValue>(gvOp->getOperand(0));
         annotation.value = parseString(annotStruct->getOperand(1));
