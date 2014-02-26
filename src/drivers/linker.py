@@ -276,7 +276,7 @@ if not out_file:
 info('Using output file ' + out_file)
 
 ld_args = ['-L', mcu_ldscripts_path, '-L', msp_paths['lib'],
-            '-T', ldscript_name, '-o', out_file]
+           '-L', get_data_path() + '/lib', '-T', ldscript_name, '-o', out_file]
 ld_libs = ['-lsancus-sm-support']
 
 if args.standalone:
