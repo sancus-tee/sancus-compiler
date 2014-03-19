@@ -1,0 +1,17 @@
+include(FindPackageHandleStandardArgs)
+include("${CMAKE_CURRENT_LIST_DIR}/ExportTargets.cmake")
+
+set(SANCUS_INCLUDES    "@INSTALL_INCLUDES_DIR@")
+set(SANCUS_MODULE_LIBS sancus_compiler_sancus-sm-support)
+set(SANCUS_HOST_LIBS   sancus_compiler_sancus-host-support)
+set(SANCUS_CC          "@INSTALL_BINS_DIR@/sancus-cc")
+set(SANCUS_LD          "@INSTALL_BINS_DIR@/sancus-ld")
+set(SANCUS_CRYPTO      "@INSTALL_BINS_DIR@/sancus-crypto")
+
+mark_as_advanced(SANCUS_CC SANCUS_LD SANCUS_CRYPTO
+                 SANCUS_INCLUDES
+                 SANCUS_MODULE_LIBS SANCUS_HOST_LIBS)
+find_package_handle_standard_args(Sancus-Compiler DEFAULT_MSG
+                                  SANCUS_CC SANCUS_LD SANCUS_CRYPTO
+                                  SANCUS_INCLUDES
+                                  SANCUS_MODULE_LIBS SANCUS_HOST_LIBS)

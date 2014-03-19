@@ -26,4 +26,5 @@ set(FILES
     sancus.ld
 )
 
-install(FILES ${FILES} DESTINATION ${INSTALL_DATA_PATH})
+install(FILES ${FILES}
+        DESTINATION ${INSTALL_BASE_DIR})

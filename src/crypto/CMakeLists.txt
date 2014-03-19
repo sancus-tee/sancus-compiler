@@ -10,4 +10,5 @@ set(SRC
 
 add_library(sancus-crypto SHARED ${SRC})
 
-install(TARGETS sancus-crypto LIBRARY DESTINATION ${INSTALL_DATA_PATH})
+install(TARGETS sancus-crypto
+        LIBRARY DESTINATION ${INSTALL_BASE_DIR})
