@@ -10,9 +10,9 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/TypeBuilder.h>
+#include <llvm/IR/CallSite.h>
+#include <llvm/IR/InstIterator.h>
 
-#include <llvm/Support/CallSite.h>
-#include <llvm/Support/InstIterator.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Debug.h>
 
