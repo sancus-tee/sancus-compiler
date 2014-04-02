@@ -5,7 +5,6 @@ set(SRC
     FindMSPGCC.cmake
     UseMSPGCC.cmake
     SpmCompilerConfig.cmake
-    UseSancus-Compiler.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/Sancus-CompilerConfig.cmake
 )
 
