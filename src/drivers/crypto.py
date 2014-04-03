@@ -205,6 +205,9 @@ try:
             print body.encode('hex')
         else:
             fatal_error('Incorrect tag')
+    elif args.mac:
+        with open(args.in_file, 'r') as file:
+            print get_sm_mac(file, args.mac, args.key).encode('hex')
     else:
         with open(args.in_file, 'r') as file:
             if args.gen_sm_key:
