@@ -67,7 +67,12 @@ always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
                                 const void* body, size_t body_len,
                                 void* cipher, void* tag)
 {
+    void* ad_end = (char*)ad + ad_len;
+    void* body_end = (char*)body + body_len;
     sm_id ret;
+
+    // we use memory constraints for all operands because otherwise LLVM's
+    // register allocator messes up and uses some of the clobbered registers
     asm("mov %1, r10\n\t"
         "mov %2, r11\n\t"
         "mov %3, r12\n\t"
@@ -77,10 +82,11 @@ always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
         ".word 0x1384\n\t"
         "mov r15, %0"
         : "=m"(ret)
-        :"m"(ad), "r"((char*)ad + ad_len),
-         "m"(body), "r"((char*)body + ad_len),
+        :"m"(ad), "m"(ad_end),
+         "m"(body), "m"(body_end),
          "m"(cipher), "m"(tag)
         : "r10", "r11", "r12", "r13", "r14", "r15");
+
     return ret;
 }
 
@@ -88,7 +94,12 @@ always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
                                   const void* cipher, size_t cipher_len,
                                   const void* tag, void* body)
 {
+    void* ad_end = (char*)ad + ad_len;
+    void* cipher_end = (char*)cipher + cipher_len;
     sm_id ret;
+
+    // we use memory constraints for all operands because otherwise LLVM's
+    // register allocator messes up and uses some of the clobbered registers
     asm("mov %1, r10\n\t"
         "mov %2, r11\n\t"
         "mov %3, r12\n\t"
@@ -98,10 +109,39 @@ always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
         ".word 0x1385\n\t"
         "mov r15, %0"
         : "=m"(ret)
-        :"m"(ad), "r"((char*)ad + ad_len),
-         "m"(cipher), "r"((char*)cipher + cipher_len),
+        :"m"(ad), "m"(ad_end),
+         "m"(cipher), "m"(cipher_end),
          "m"(body), "m"(tag)
         : "r10", "r11", "r12", "r13", "r14", "r15");
+
+    return ret;
+}
+
+always_inline sm_id sancus_get_id(void* addr)
+{
+    sm_id ret;
+    asm("mov %1, r15\n\t"
+        ".word 0x1386\n\t"
+        "mov r15, %0"
+        : "=m"(ret)
+        : "m"(addr)
+        : "r15");
+    return ret;
+}
+
+always_inline sm_id sancus_get_self_id(void)
+{
+    void* addr;
+    asm("mov r0, %0" : "=m"(addr));
+    return sancus_get_id(addr);
+}
+
+always_inline sm_id sancus_get_caller_id(void)
+{
+    sm_id ret;
+    asm(".word 0x1387\n\t"
+        "mov r15, %0"
+        : "=m"(ret));
     return ret;
 }
 
