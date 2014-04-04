@@ -24,6 +24,13 @@ def _print_data(data):
         print '\n',
 
 
+def _output_data(data):
+    if sys.stdout.isatty():
+        print data.encode('hex')
+    else:
+        sys.stdout.write(data)
+
+
 def wrap(key, ad, body):
     cipher = '\x00' * len(body)
     tag = '\x00' * (KEY_SIZE / 8)
@@ -191,27 +198,27 @@ set_args(args)
 
 try:
     if args.gen_vendor_key:
-        print mac(args.key, args.gen_vendor_key).encode('hex')
+        _output_data(mac(args.key, args.gen_vendor_key))
     elif args.wrap:
         ad, body = args.wrap
         cipher, tag = wrap(args.key, ad, body)
-        print cipher.encode('hex')
-        print 'Tag:', tag.encode('hex')
+        _output_data(tag)
+        _output_data(cipher)
     elif args.unwrap:
         ad, cipher, tag = args.unwrap
         body = unwrap(args.key, ad, cipher, tag)
 
         if body:
-            print body.encode('hex')
+            _output_data(body)
         else:
             fatal_error('Incorrect tag')
     elif args.mac:
         with open(args.in_file, 'r') as file:
-            print get_sm_mac(file, args.mac, args.key).encode('hex')
+            _output_data(get_sm_mac(file, args.mac, args.key))
     else:
         with open(args.in_file, 'r') as file:
             if args.gen_sm_key:
-                print get_sm_key(file, args.gen_sm_key, args.key).encode('hex')
+                _output_data(get_sm_key(file, args.gen_sm_key, args.key))
             else:
                 if not args.out_file:
                     fatal_error('Requested to fill MAC sections but no ' +
