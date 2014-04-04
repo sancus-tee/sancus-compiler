@@ -284,5 +284,7 @@ if args.standalone:
     ld_args += args.in_files + cli_ld_args + ld_libs
     call_prog('msp430-gcc', ld_args)
 else:
-    ld_args += ['-r'] + args.in_files + cli_ld_args + ld_libs
+    # -d makes sure no COMMON symbols are created since these are annoying to
+    # handle in the dynamic loader (and pretty useless anyway)
+    ld_args += ['-r', '-d'] + args.in_files + cli_ld_args + ld_libs
     call_prog('msp430-ld', ld_args)
