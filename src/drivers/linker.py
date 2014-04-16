@@ -71,6 +71,7 @@ sms_table_order = {}
 sms_entries = {}
 sms_calls = {}
 existing_sms = set()
+existing_macs = []
 
 for file_name in args.in_files:
     try:
@@ -121,6 +122,11 @@ for file_name in args.in_files:
                             if not sm_name in sms_calls:
                                 sms_calls[sm_name] = set()
                             sms_calls[sm_name].add(rel_match.group(1))
+                    continue
+
+                match = re.match(r'.sm.(\w+).mac.(\w+)', section.name)
+                if match:
+                    existing_macs.append((match.group(1), match.group(2)))
                     continue
     except IOError as e:
         fatal_error(str(e))
@@ -192,11 +198,17 @@ existing_text_section = '''.text.sm.{0} :
     *(.sm.{0}.text)
   }}'''
 
+existing_mac_section = '''.data.sm.{0}.mac.{1} :
+  {{
+    *(.sm.{0}.mac.{1})
+  }}'''
+
 if args.standalone:
     text_section += ' > REGION_TEXT'
     data_section += ' > REGION_DATA'
     mac_section += ' > REGION_TEXT'
     existing_text_section += ' > REGION_TEXT'
+    existing_mac_section += ' > REGION_TEXT'
 
 text_sections = []
 data_sections = []
@@ -247,6 +259,9 @@ for sm in sms:
 
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))
+
+for caller, callee in existing_macs:
+    mac_sections.append(existing_mac_section.format(caller, callee))
 
 text_sections = '\n  '.join(text_sections)
 data_sections = '\n  '.join(data_sections)
