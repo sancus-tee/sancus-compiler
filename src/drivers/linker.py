@@ -61,9 +61,19 @@ parser.add_argument('--sm-stack-size',
                     type=positive_int,
                     default=256,
                     metavar='size')
+parser.add_argument('--print-default-libs',
+                    help='Print libraries that are always linked',
+                    action='store_true')
 
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
+
+if args.print_default_libs:
+    lib_dir = get_data_path() + '/lib'
+    print lib_dir + '/libsancus-sm-support.a'
+    if args.standalone:
+        print lib_dir + '/libsancus-host-support.a'
+    sys.exit(0)
 
 # find all defined SMs
 sms = set()
