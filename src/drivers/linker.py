@@ -34,6 +34,16 @@ def parse_size(val):
         return int(match.group(1)) * 1024
 
 
+def get_symbol(elf_file, name):
+    from elftools.elf.elffile import SymbolTableSection
+    for section in elf_file.iter_sections():
+        if isinstance(section, SymbolTableSection):
+            for symbol in section.iter_symbols():
+                sym_section = symbol['st_shndx']
+                if symbol.name == name and sym_section != 'SHN_UNDEF':
+                    return symbol
+
+
 parser = argparse.ArgumentParser(description='Sancus module linker.',
                                  parents=[get_common_parser()])
 parser.add_argument('--standalone', action='store_true')
@@ -60,15 +70,23 @@ sms = set()
 sms_table_order = {}
 sms_entries = {}
 sms_calls = {}
+existing_sms = set()
 
 for file_name in args.in_files:
     try:
         with open(file_name, 'rb') as file:
             elf_file = ELFFile(file)
             for section in elf_file.iter_sections():
-                match = re.match(r'.sm.(\w+).', section.name)
+                match = re.match(r'.sm.(\w+).text', section.name)
                 if match:
-                    sms.add(match.group(1))
+                    sm_name = match.group(1)
+                    # if the following symbol exists, we assume the SM is
+                    # created manually and we will output it "as is"
+                    label = '__sm_{}_public_start'.format(sm_name)
+                    if get_symbol(elf_file, label) is None:
+                        sms.add(sm_name)
+                    else:
+                        existing_sms.add(sm_name)
                     continue
 
                 match = re.match(r'.rela.sm.(\w+).table', section.name)
@@ -99,8 +117,7 @@ for file_name in args.in_files:
                         rel_match = re.match(r'__sm_(\w+)_entry',
                                              symtab.get_symbol(
                                                  rel['r_info_sym']).name)
-                        if rel_match:
-                            assert rel_match.group(1) != sm_name
+                        if rel_match and rel_match.group(1) != sm_name:
                             if not sm_name in sms_calls:
                                 sms_calls[sm_name] = set()
                             sms_calls[sm_name].add(rel_match.group(1))
@@ -112,7 +129,7 @@ for file_name in args.in_files:
               'ELF file ({})'.format(file_name, e))
 
 if len(sms) > 0:
-    info('Found Sancus modules:')
+    info('Found new Sancus modules:')
     for sm in sms:
         info(' * {}:'.format(sm))
         if sm in sms_entries:
@@ -124,7 +141,14 @@ if len(sms) > 0:
         else:
             info('  - No calls to other modules')
 else:
-    info('No Sancus modules found')
+    info('No new Sancus modules found')
+
+if len(existing_sms) > 0:
+    info('Found existing Sancus modules:')
+    for sm in existing_sms:
+        info(' * {}'.format(sm))
+else:
+    info('No existing Sancus modules found')
 
 # create output sections for the the SM to be inserted in the linker script
 text_section = '''.text.sm.{0} :
@@ -163,10 +187,16 @@ mac_section = '''.data.sm.{0}.mac.{1} :
     . += {2} - 1;
   }}'''
 
+existing_text_section = '''.text.sm.{0} :
+  {{
+    *(.sm.{0}.text)
+  }}'''
+
 if args.standalone:
     text_section += ' > REGION_TEXT'
     data_section += ' > REGION_DATA'
     mac_section += ' > REGION_TEXT'
+    existing_text_section += ' > REGION_TEXT'
 
 text_sections = []
 data_sections = []
@@ -214,6 +244,9 @@ for sm in sms:
     for idx, entry in enumerate(sms_entries[sm]):
         sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry)
         symbols.append('{} = {};'.format(sym_name, idx))
+
+for sm in existing_sms:
+    text_sections.append(existing_text_section.format(sm))
 
 text_sections = '\n  '.join(text_sections)
 data_sections = '\n  '.join(data_sections)
