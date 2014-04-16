@@ -109,19 +109,7 @@ def get_sm_key(file, sm, master_key):
 
 
 def get_sm_mac(file, sm, key):
-    elf_file = ELFFile(file)
-    data = _get_sm_section(elf_file, sm).data()
-    symbols = _get_symbols(elf_file)
-    prefix = '__sm_{}_'.format(sm)
-    names = [prefix + s for s in ['public_start', 'public_end',
-                                  'secret_start', 'secret_end']]
-    for name in names:
-        try:
-            data += _int_to_bytes(symbols[name])
-        except KeyError:
-            fatal_error('Symbol {} not found'.format(name))
-
-    return mac(key, data)
+    return mac(key, _get_sm_identity(file, sm))
 
 
 def fill_mac_sections(file):
