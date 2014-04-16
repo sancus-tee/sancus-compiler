@@ -146,6 +146,7 @@ always_inline sm_id sancus_get_caller_id(void)
 }
 
 void __unprotected_entry(void);
+extern char __unprotected_sp;
 
 #define __ANNOTATE(x) __attribute__((annotate(x)))
 
