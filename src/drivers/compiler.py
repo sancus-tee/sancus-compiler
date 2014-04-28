@@ -26,7 +26,7 @@ parser.add_argument('-c',
 parser.add_argument('-O',
                     dest='optimization',
                     help='Set optimization level',
-                    choices=['0', '1', '2', '3'],
+                    choices=['0', '1', '2', '3', 's'],
                     default='0')
 
 args, cc_args = parser.parse_known_args()
@@ -65,9 +65,7 @@ else:
 cc_args += ['-D' + mcu_define]
 info('Using MCU define ' + mcu_define)
 
-optimization = '-O' + args.optimization
-cc_args.append(optimization)
-
+cc_args.append('-O' + args.optimization)
 as_args = []
 
 if is_assembly(in_file):
@@ -85,7 +83,8 @@ else:
     call_prog('opt', opt_args)
 
     assembly = get_tmp('.s')
-    llc_args = [optimization, '-msp430-hwmult-mode=no', '-o', assembly, opt_bc]
+    llc_opt = '-O' + ('0' if args.optimization == 's' else args.optimization)
+    llc_args = [llc_opt, '-msp430-hwmult-mode=no', '-o', assembly, opt_bc]
     call_prog('llc', llc_args)
 
 as_args += ['-c', '-o', out_file, assembly]
