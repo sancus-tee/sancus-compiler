@@ -91,6 +91,15 @@ bool SancusModuleCreator::runOnModule(Module& m)
 
     createFunctionTable(m);
 
+    if (modified)
+    {
+        // module-level inline assembly gets inserted after the .text directive.
+        // this means that if the added assembly changes the section, this
+        // section will be used for the rest of the file if we don't add the
+        // .text declaration after it
+        m.appendModuleInlineAsm(".text\n");
+    }
+
     return modified;
 }
 
