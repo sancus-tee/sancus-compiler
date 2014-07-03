@@ -5,11 +5,14 @@ SECTIONS
 {
   $sm_text_sections
   $sm_mac_sections
-  $sm_data_sections
 
   .text : {*(.text) *(.rodata)}
   .data : {*(.data)}
-  .bss  : {*(.bss)}
+  .bss  :
+  {
+    *(.bss)
+    $sm_data_sections
+  }
 }
 
 $sm_symbols

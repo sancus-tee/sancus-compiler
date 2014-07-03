@@ -181,9 +181,7 @@ text_section = '''.text.sm.{0} :
     __sm_{0}_public_end = .;
   }}'''
 
-data_section = '''.data.sm.{0} :
-  {{
-    . = ALIGN(2);
+data_section = '''. = ALIGN(2);
     __sm_{0}_secret_start = .;
     *(.sm.{0}.data)
     {1}
@@ -192,8 +190,7 @@ data_section = '''.data.sm.{0} :
     __sm_{0}_sp = .;
     . += 2;
     . = ALIGN(2);
-    __sm_{0}_secret_end = .;
-  }}'''
+    __sm_{0}_secret_end = .;'''
 
 mac_section = '''.data.sm.{0}.mac.{1} :
   {{
@@ -215,7 +212,6 @@ existing_mac_section = '''.data.sm.{0}.mac.{1} :
 
 if args.standalone:
     text_section += ' > REGION_TEXT'
-    data_section += ' > REGION_DATA'
     mac_section += ' > REGION_TEXT'
     existing_text_section += ' > REGION_TEXT'
     existing_mac_section += ' > REGION_TEXT'
@@ -274,7 +270,7 @@ for caller, callee in existing_macs:
     mac_sections.append(existing_mac_section.format(caller, callee))
 
 text_sections = '\n  '.join(text_sections)
-data_sections = '\n  '.join(data_sections)
+data_sections = '\n    '.join(data_sections)
 mac_sections = '\n  '.join(mac_sections)
 symbols = '\n'.join(symbols)
 

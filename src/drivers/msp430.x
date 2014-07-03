@@ -86,7 +86,6 @@ SECTIONS
     *(.data .data.* .gnu.linkonce.d.*)
      . = ALIGN(2);
   }  > REGION_DATA AT > REGION_TEXT
-  $sm_data_sections
    _edata = . ;  /* Past last read-write (loadable) segment */
    PROVIDE (__data_load_start = LOADADDR(.data) );
    PROVIDE (__data_size = _edata - __data_start );
@@ -98,6 +97,7 @@ SECTIONS
      . = ALIGN(2);
      __unprotected_sp = .;
      . += 2;
+     $sm_data_sections
      PROVIDE (__bss_end = .) ;
   }  > REGION_DATA
    PROVIDE (__bss_size = SIZEOF(.bss) );
