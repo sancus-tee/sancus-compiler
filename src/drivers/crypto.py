@@ -172,6 +172,10 @@ parser.add_argument('--unwrap',
                     type=_parse_hex,
                     nargs=3,
                     metavar=('AD', 'CIPHER', 'TAG'))
+parser.add_argument('--tag',
+                    help='Generate a tag of the given data',
+                    type=_parse_hex,
+                    metavar='data')
 parser.add_argument('-o',
                     help='Output file',
                     dest='out_file',
@@ -203,6 +207,8 @@ try:
     elif args.mac:
         with open(args.in_file, 'r') as file:
             _output_data(get_sm_mac(file, args.mac, args.key))
+    elif args.tag:
+        _output_data(mac(args.key, args.tag))
     else:
         with open(args.in_file, 'r') as file:
             if args.gen_sm_key:

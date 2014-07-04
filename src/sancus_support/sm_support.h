@@ -117,6 +117,11 @@ always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
     return ret;
 }
 
+always_inline sm_id sancus_tag(const void* body, size_t body_len, void* tag)
+{
+    return sancus_wrap(body, body_len, NULL, 0, NULL, tag);
+}
+
 always_inline sm_id sancus_get_id(void* addr)
 {
     sm_id ret;
