@@ -9,4 +9,10 @@ set(SRC
     ${CMAKE_CURRENT_BINARY_DIR}/Sancus-CompilerConfig.cmake
 )
 
+configure_file(SancusCrypto.cmake SancusCrypto.cmake COPYONLY)
+
+export(TARGETS sancus-sm-support sancus-host-support
+       NAMESPACE sancus_compiler_
+       FILE "${CMAKE_CURRENT_BINARY_DIR}/ExportTargets.cmake")
+
 install(FILES ${SRC} DESTINATION ${INSTALL_CMAKE_DIR})
