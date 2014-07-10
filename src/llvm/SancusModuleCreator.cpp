@@ -153,6 +153,9 @@ bool SancusModuleCreator::handleFunction(Function& f)
                          Twine(loc.getCol()) + ")";
             }
 
+            // FIXME this warning is too strict since it also fires on "normal"
+            // function pointers. we should try to warn only when a function
+            // pointer is used inside an SM or is created from an SM function.
             errs() << "WARNING: In function " << f.getName() << locStr
                    << ": Function pointers not supported yet\n";
             continue;
