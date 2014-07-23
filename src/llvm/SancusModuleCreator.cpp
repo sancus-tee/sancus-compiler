@@ -146,11 +146,12 @@ bool SancusModuleCreator::handleFunction(Function& f)
             }
 
             DebugLoc loc = inst->getDebugLoc();
-            Twine locStr;
+            std::string locStr;
             if (!loc.isUnknown())
             {
-                locStr = " (" + Twine(loc.getLine()) + ":" +
-                         Twine(loc.getCol()) + ")";
+                Twine t(" (" + Twine(loc.getLine()) + ":" +
+                        Twine(loc.getCol()) + ")");
+                locStr = t.str();
             }
 
             errs() << "WARNING: In function " << f.getName() << locStr
