@@ -159,5 +159,7 @@ extern char __unprotected_sp;
 #define SM_ENTRY(name) __ANNOTATE("sm_entry:" name) __attribute__((noinline, used))
 #define SM_DATA(name)  SM_FUNC(name)
 
+#define SM_VECTOR 26
+
 #endif
 
