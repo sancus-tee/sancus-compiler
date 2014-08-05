@@ -12,7 +12,11 @@ __unprotected_sp:
     ; r6: address of function to call
     ; r7: return address
 __unprotected_entry:
+    ; restore the unprotected stack
     mov &__unprotected_sp, r1
     call r6
+    ; if __unprotected_entry was called somewhere during the above call, the
+    ; stored stack pointer has changed so we need to store the correct one again
+    mov r1, &__unprotected_sp
     mov #0xffff, r6
     br r7
