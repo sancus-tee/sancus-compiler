@@ -288,5 +288,15 @@ extern char __unprotected_sp;
  */
 #define SM_VECTOR 26
 
+/**
+ * Return value of sancus_get_caller_id() for unprotected code.
+ */
+#define SM_ID_UNPROTECTED 0
+
+/**
+ * Return value of sancus_get_caller_id() for an IRQ.
+ */
+#define SM_ID_IRQ 0xffff
+
 #endif
 
