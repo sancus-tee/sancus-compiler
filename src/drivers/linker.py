@@ -205,6 +205,9 @@ existing_text_section = '''.text.sm.{0} :
     *(.sm.{0}.text)
   }}'''
 
+existing_data_section = '''. = ALIGN(2);
+  *(.sm.{0}.data)'''
+
 existing_mac_section = '''.data.sm.{0}.mac.{1} :
   {{
     *(.sm.{0}.mac.{1})
@@ -265,6 +268,7 @@ for sm in sms:
 
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))
+    data_sections.append(existing_data_section.format(sm))
 
 for caller, callee in existing_macs:
     mac_sections.append(existing_mac_section.format(caller, callee))
