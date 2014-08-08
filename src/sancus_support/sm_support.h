@@ -85,6 +85,25 @@ always_inline void sancus_disable()
 }
 
 /**
+ * Verify the module located at a specific address.
+ *
+ * @see sancus_verify()
+ */
+always_inline sm_id sancus_verify_address(const void* expected_tag,
+                                          const void* address)
+{
+    sm_id ret;
+    asm("mov %1, r14\n\t"
+        "mov %2, r15\n\t"
+        ".word 0x1382\n\t"
+        "mov r15, %0"
+        : "=m"(ret)
+        : "r"(address), "r"(expected_tag)
+        : "r14", "r15");
+    return ret;
+}
+
+/**
  * Verify the correctness of a module.
  *
  * The correctness of a module is verified by calculating a MAC of the layout
@@ -97,15 +116,7 @@ always_inline void sancus_disable()
 always_inline sm_id sancus_verify(const void* expected_tag,
                                   struct SancusModule* sm)
 {
-    sm_id ret;
-    asm("mov %1, r14\n\t"
-        "mov %2, r15\n\t"
-        ".word 0x1382\n\t"
-        "mov r15, %0"
-        : "=m"(ret)
-        : "r"(sm->public_start), "r"(expected_tag)
-        : "r14", "r15");
-    return ret;
+    return sancus_verify_address(expected_tag, sm->public_start);
 }
 
 /**
