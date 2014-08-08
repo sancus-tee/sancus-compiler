@@ -309,5 +309,14 @@ extern char __unprotected_sp;
  */
 #define SM_ID_IRQ 0xffff
 
-#endif
+/**
+ * The number of bits security offered by the crypto functions
+ */
+#define SANCUS_SECURITY 64
 
+/**
+ * The size of the tags used and produces by the crypto functions.
+ */
+#define SANCUS_TAG_SIZE (SANCUS_SECURITY / 8)
+
+#endif
