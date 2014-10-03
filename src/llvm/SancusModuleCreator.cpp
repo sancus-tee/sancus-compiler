@@ -12,9 +12,12 @@
 #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/CallSite.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/InlineAsm.h>
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Debug.h>
+
+#include <sstream>
 
 using namespace llvm;
 
@@ -41,6 +44,7 @@ struct SancusModuleCreator : ModulePass
                                  Module& m);
     GlobalVariable* getSymbolAddress(Module& m, StringRef name);
     std::string fixSymbolName(const std::string& name);
+    CallSite handleSancusCall(CallSite cs);
 
     typedef std::map<const GlobalValue*, SancusModuleInfo> InfoMap;
     InfoMap modulesInfo;
@@ -128,6 +132,7 @@ bool SancusModuleCreator::handleFunction(Function& f)
         entries.push_back(&f);
 
     std::map<Instruction*, Instruction*> verifications;
+    std::map<Instruction*, Instruction*> replacements;
 
     for (inst_iterator it = inst_begin(f), end = inst_end(f); it != end; ++it)
     {
@@ -163,6 +168,12 @@ bool SancusModuleCreator::handleFunction(Function& f)
         }
         else if (callee->isIntrinsic())
             continue;
+        else if (callee->getName() == "sancus_call")
+        {
+            replacements[cs.getInstruction()] =
+                handleSancusCall(cs).getInstruction();
+            continue;
+        }
 
         if (Instruction* v = getVerification(info, getSancusModuleInfo(callee),
                                              *f.getParent()))
@@ -179,6 +190,15 @@ bool SancusModuleCreator::handleFunction(Function& f)
 
     for (auto pair : verifications)
         pair.second->insertBefore(pair.first);
+
+    for (auto pair : replacements)
+    {
+        auto oldInst = pair.first;
+        auto newInst = pair.second;
+        newInst->insertBefore(oldInst);
+        oldInst->replaceAllUsesWith(newInst);
+        oldInst->eraseFromParent();
+    }
 
     return modified;
 }
@@ -457,3 +477,74 @@ std::string SancusModuleCreator::fixSymbolName(const std::string& name)
         return name;
 }
 
+CallSite SancusModuleCreator::handleSancusCall(CallSite cs)
+{
+    assert(cs.arg_size() >= 2 && "sancus_call needs at least 2 arguments");
+
+    auto numAsmArgs = cs.arg_size() - 2;
+
+    if (numAsmArgs > 3)
+    {
+        report_fatal_error("Currently, maximum 3 arguments are supported by "
+                           "sancus_call");
+    }
+
+    auto argTys = std::vector<Type*>{voidPtrTy, wordTy};
+    auto entryVal = cs.getArgument(0);
+    auto indexVal = cs.getArgument(1);
+    auto args = std::vector<Value*>{entryVal, indexVal};
+
+    auto inputConstraints = std::string{",r,r"};
+    std::ostringstream argsAsm;
+    auto regsUsage = unsigned{0x10};
+    auto clobbers = std::string{",~{r6},~{r7},~{r8},~{r15}"};
+    auto callerInfo = getSancusModuleInfo(cs.getCaller());
+
+    for (decltype(numAsmArgs) i = 0; i < numAsmArgs; i++)
+    {
+        auto arg = cs.getArgument(i + 2);
+        auto argTy = arg->getType();
+
+        // TODO FunctionCcInfo should be used to check the argument. This is not
+        // possible currently since it takes a Function* as argument.
+        if (argTy->getPrimitiveSizeInBits() != 16)
+            report_fatal_error("Illegal argument type in call to sancus_call");
+
+        inputConstraints += ",r";
+
+        std::ostringstream regStream;
+        regStream << "r" << 15 - i;
+        auto regStr = regStream.str();
+
+        if (regStr != "r15")
+            clobbers += ",~{" + regStr + "}";
+
+        argsAsm << "mov $" << i + 3 << ", " << regStr << "\n\t";
+        args.push_back(arg);
+        argTys.push_back(argTy);
+
+        // see sm_exit.s to understand how this value is used.
+        regsUsage >>= 1;
+    }
+
+    auto asmStr = Twine("push #1f\n\t"
+                        "push r6\n\t"
+                        "push r7\n\t"
+                        "push r8\n\t"
+                        "mov $2, r6\n\t"
+                        "mov #" + Twine(regsUsage) + ", r7\n\t"
+                        "mov $1, r8\n\t" + argsAsm.str() +
+                        "br #" + callerInfo.getExitName() + "\n"
+                        "1:\n\t"
+                        "mov r15, $0"
+                        ).str();
+
+    auto constraintsStr = "=r" + inputConstraints + clobbers;
+    auto resTy = wordTy;
+    auto asmFuncTy = FunctionType::get(resTy, argTys, /*isVarArg=*/false);
+    auto inlineAsm = InlineAsm::get(asmFuncTy, asmStr, constraintsStr,
+                                    /*hasSideEffects=*/false);
+
+    auto asmCall = CallInst::Create(inlineAsm, args);
+    return CallSite(asmCall);
+}

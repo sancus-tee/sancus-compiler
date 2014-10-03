@@ -17,6 +17,11 @@ typedef unsigned sm_id;
 typedef unsigned vendor_id;
 
 /**
+ * Type used to represent the index of an entry point.
+ */
+typedef unsigned entry_idx;
+
+/**
  * Structure containing all the relevant information of a Sancus module.
  *
  * Note that #id will only be correct after a call to sancus_enable().
@@ -253,6 +258,8 @@ always_inline sm_id sancus_get_caller_id(void)
         : "=m"(ret));
     return ret;
 }
+
+unsigned sancus_call(void* entry, entry_idx index, ...);
 
 void __unprotected_entry(void);
 extern char __unprotected_sp;
