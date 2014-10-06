@@ -542,8 +542,11 @@ CallSite SancusModuleCreator::handleSancusCall(CallSite cs)
     auto constraintsStr = "=r" + inputConstraints + clobbers;
     auto resTy = wordTy;
     auto asmFuncTy = FunctionType::get(resTy, argTys, /*isVarArg=*/false);
+
+    // NOTE hasSideEffects has to be true because the inline assembly may be
+    // optimised away otherwise
     auto inlineAsm = InlineAsm::get(asmFuncTy, asmStr, constraintsStr,
-                                    /*hasSideEffects=*/false);
+                                    /*hasSideEffects=*/true);
 
     auto asmCall = CallInst::Create(inlineAsm, args);
     return CallSite(asmCall);
