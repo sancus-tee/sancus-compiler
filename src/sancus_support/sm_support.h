@@ -259,6 +259,17 @@ always_inline sm_id sancus_get_caller_id(void)
     return ret;
 }
 
+/**
+ * Perform a call to a Sancus module.
+ *
+ * The call will be inlined at the call site which means that the control flow
+ * will not pass through unprotected code. @p entry should point to the module's
+ * entry point and @p index is the index of the entry function to be called. The
+ * rest of the parameters (maximum 3 at the moment) are forwarded to the called
+ * module.
+ *
+ * @note This function is implemented as a compiler intrinsic.
+ */
 unsigned sancus_call(void* entry, entry_idx index, ...);
 
 void __unprotected_entry(void);
