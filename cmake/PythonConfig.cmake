@@ -1,4 +1,4 @@
-find_package(PythonInterp REQUIRED)
+find_package(PythonInterp 3.0.0 REQUIRED)
 
 function(find_python_module mod)
     execute_process(COMMAND python -c "import ${mod}"

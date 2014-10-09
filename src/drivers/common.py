@@ -18,7 +18,7 @@ def get_data_path():
 
 def get_msp_paths():
     base = call_prog('msp430-gcc', ['-print-file-name=ldscripts'],
-                     get_output=True)
+                     get_output=True).decode('ascii')
     base = os.path.abspath(os.path.dirname(base + '/../../..'))
     info('Found MSP430 install directory: ' + base)
     libc_include = base + '/include'
@@ -26,7 +26,7 @@ def get_msp_paths():
     ldscripts = lib + '/ldscripts'
 
     gcc_base = call_prog('msp430-gcc', ['-print-file-name=include'],
-                         get_output=True)
+                         get_output=True).decode('ascii')
     gcc_base = os.path.abspath(os.path.dirname(gcc_base))
     info('Found MSP430 GCC install directory: ' + gcc_base)
     gcc_include = gcc_base + "/include"

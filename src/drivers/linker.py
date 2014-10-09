@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import re
 import string
@@ -9,13 +9,13 @@ from elftools.common.exceptions import ELFError
 import config
 from common import *
 
-MAC_SIZE = config.SECURITY / 8
+MAC_SIZE = int(config.SECURITY / 8)
 
 def rename_syms_sects(file, sym_map, sect_map):
     args = []
-    for old, new in sym_map.iteritems():
+    for old, new in sym_map.items():
         args += ['--redefine-sym', '{}={}'.format(old, new)]
-    for old, new in sect_map.iteritems():
+    for old, new in sect_map.items():
         args += ['--rename-section', '{}={}'.format(old, new)]
 
     out_file = get_tmp('.o')
@@ -70,9 +70,9 @@ set_args(args)
 
 if args.print_default_libs:
     lib_dir = get_data_path() + '/lib'
-    print lib_dir + '/libsancus-sm-support.a'
+    print(lib_dir + '/libsancus-sm-support.a')
     if args.standalone:
-        print lib_dir + '/libsancus-host-support.a'
+        print(lib_dir + '/libsancus-host-support.a')
     sys.exit(0)
 
 # find all defined SMs
@@ -88,19 +88,20 @@ for file_name in args.in_files:
         with open(file_name, 'rb') as file:
             elf_file = ELFFile(file)
             for section in elf_file.iter_sections():
-                match = re.match(r'.sm.(\w+).text', section.name)
+                name = section.name.decode('ascii')
+                match = re.match(r'.sm.(\w+).text', name)
                 if match:
                     sm_name = match.group(1)
                     # if the following symbol exists, we assume the SM is
                     # created manually and we will output it "as is"
                     label = '__sm_{}_public_start'.format(sm_name)
-                    if get_symbol(elf_file, label) is None:
+                    if get_symbol(elf_file, label.encode('ascii')) is None:
                         sms.add(sm_name)
                     else:
                         existing_sms.add(sm_name)
                     continue
 
-                match = re.match(r'.rela.sm.(\w+).table', section.name)
+                match = re.match(r'.rela.sm.(\w+).table', name)
                 if match:
                     sm_name = match.group(1)
                     if not sm_name in sms_table_order:
@@ -115,26 +116,27 @@ for file_name in args.in_files:
                                 symtab.get_symbol(rel['r_info_sym']).name)
                                     for rel in section.iter_relocations()]
                     entries.sort()
-                    sms_entries[sm_name] += [entry for _, entry in entries]
+                    sms_entries[sm_name] += \
+                        [entry.decode('ascii') for _, entry in entries]
                     continue
 
-                match = re.match(r'.rela.sm.(\w+).text', section.name)
+                match = re.match(r'.rela.sm.(\w+).text', name)
                 if match:
                     sm_name = match.group(1)
 
                     #find call from this SM to others
                     symtab = elf_file.get_section(section['sh_link'])
                     for rel in section.iter_relocations():
-                        rel_match = re.match(r'__sm_(\w+)_entry',
-                                             symtab.get_symbol(
-                                                 rel['r_info_sym']).name)
+                        sym_name = symtab.get_symbol(rel['r_info_sym']).name
+                        rel_match = re.match(rb'__sm_(\w+)_entry', sym_name)
                         if rel_match and rel_match.group(1) != sm_name:
                             if not sm_name in sms_calls:
                                 sms_calls[sm_name] = set()
-                            sms_calls[sm_name].add(rel_match.group(1))
+                            callee_name = rel_match.group(1).decode('ascii')
+                            sms_calls[sm_name].add(callee_name)
                     continue
 
-                match = re.match(r'.sm.(\w+).mac.(\w+)', section.name)
+                match = re.match(r'.sm.(\w+).mac.(\w+)', name)
                 if match:
                     existing_macs.append((match.group(1), match.group(2)))
                     continue
@@ -149,6 +151,7 @@ if len(sms) > 0:
     for sm in sms:
         info(' * {}:'.format(sm))
         if sm in sms_entries:
+            #entry_names = [entry.decode('ascii') for entry in sms_entries[sm]]
             info('  - Entries: {}'.format(', '.join(sms_entries[sm])))
         else:
             info('  - No entries')
@@ -229,7 +232,7 @@ for sm in sms:
                '__sm_nentries'   : nentries,
                '__sm_table'      : '__sm_{}_table'.format(sm),
                '__sm_sp'         : '__sm_{}_sp'.format(sm),
-               '__ret_entry'      : '__sm_{}_ret_entry'.format(sm),
+               '__ret_entry'     : '__sm_{}_ret_entry'.format(sm),
                '__sm_exit'       : '__sm_{}_exit'.format(sm),
                '__sm_stack_init' : '__sm_{}_stack_init'.format(sm),
                '__sm_verify'     : '__sm_{}_verify'.format(sm)}

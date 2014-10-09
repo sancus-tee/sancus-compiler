@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import config
 from common import *
@@ -6,6 +6,7 @@ from common import *
 import ctypes
 import struct
 import re
+import binascii
 
 from elftools.elf.elffile import ELFFile
 
@@ -13,55 +14,68 @@ KEY_SIZE = config.SECURITY
 
 _lib = ctypes.cdll.LoadLibrary(get_data_path() + '/libsancus-crypto.so')
 
+
+def _parse_hex(hex_str, size=0):
+    if size > 0 and len(hex_str) != size:
+        raise argparse.ArgumentTypeError('Incorrect hex size')
+    try:
+        return bytes.fromhex(hex_str)
+    except TypeError:
+        raise argparse.ArgumentTypeError('Incorrect hex format')
+
+
+def _get_hex_str(b):
+    return binascii.hexlify(b).decode('ascii')
+
 def _print_data(data):
     for i, b in enumerate(data):
         need_nl = True
-        print b.encode('hex'),
+        print(b.encode('hex'), end='')
         if (i + 1) % 26 == 0:
             need_nl = False
-            print '\n',
+            print()
     if need_nl:
-        print '\n',
+        print()
 
 
 def _output_data(data):
     if sys.stdout.isatty():
-        print data.encode('hex')
+        print(_get_hex_str(data))
     else:
-        sys.stdout.write(data)
+        sys.stdout.buffer.write(data)
 
 
 def wrap(key, ad, body):
-    cipher = '\x00' * len(body)
-    tag = '\x00' * (KEY_SIZE / 8)
+    cipher = bytes(len(body))
+    tag = bytes(int(KEY_SIZE / 8))
     ok = _lib.sancus_wrap(key, ad, ctypes.c_ulonglong(len(ad)),
                           body, ctypes.c_ulonglong(len(body)), cipher, tag)
     return (cipher, tag) if ok else None
 
 
 def unwrap(key, ad, cipher, tag):
-    body = '\x00' * len(cipher)
+    body = bytes(len(cipher))
     ok = _lib.sancus_unwrap(key, ad, ctypes.c_ulonglong(len(ad)),
                             cipher, ctypes.c_ulonglong(len(cipher)), tag, body)
     return body if ok else None
 
 
 def mac(key, msg):
-    ret = '\x00' * (KEY_SIZE / 8)
+    ret = bytes(int(KEY_SIZE / 8))
     _lib.sancus_mac(key, msg, ctypes.c_ulonglong(len(msg)), ret)
     return ret
 
 
 def _get_sm_section(elf_file, sm):
-    sm_section = elf_file.get_section_by_name('.text.sm.' + sm)
-    if not sm_section:
+    sm_section = elf_file.get_section_by_name(bytes('.text.sm.' + sm, 'ascii'))
+    if sm_section is None:
         raise ValueError('No such SM: ' + sm)
     return sm_section
 
 
 def _get_symbols(elf_file):
     from elftools.elf.sections import SymbolTableSection
-    return {symbol.name: symbol['st_value']
+    return {symbol.name.decode('ascii'): symbol['st_value']
                 for section in elf_file.iter_sections()
                     if isinstance(section, SymbolTableSection)
                         for symbol in section.iter_symbols()}
@@ -70,15 +84,6 @@ def _get_symbols(elf_file):
 def _int_to_bytes(i):
     assert 0 <= i < 2 ** 16
     return struct.pack('<H', i)
-
-
-def _parse_hex(hex_str, size=0):
-    if size > 0 and len(hex_str) != size:
-        raise argparse.ArgumentTypeError('Incorrect hex size')
-    try:
-        return hex_str.decode('hex')
-    except TypeError:
-        raise argparse.ArgumentTypeError('Incorrect hex format')
 
 
 def _parse_key(key_str):
@@ -117,21 +122,22 @@ def fill_mac_sections(file):
     keys = {}
     shutil.copy(args.in_file, args.out_file)
 
-    with open(args.out_file, 'r+') as out_file:
+    with open(args.out_file, 'rb+') as out_file:
         for section in elf_file.iter_sections():
-            match = re.match(r'.data.sm.(\w+).mac.(\w+)', section.name)
+            name = section.name.decode('ascii')
+            match = re.match(r'.data.sm.(\w+).mac.(\w+)', name)
             if match:
                 caller = match.group(1)
                 callee = match.group(2)
                 if not caller in keys:
                     keys[caller] = get_sm_key(file, caller, args.key)
-                    info('Key used for SM {}: {}'
-                             .format(caller, keys[caller].encode('hex')))
+                    hex_key = _get_hex_str(keys[caller])
+                    info('Key used for SM {}: {}'.format(caller, hex_key))
 
                 try:
                     mac = get_sm_mac(file, callee, keys[caller])
-                    info('MAC of {} used by {}: {}'
-                            .format(callee, caller, mac.encode('hex')))
+                    msg = 'MAC of {} used by {}: {}'
+                    info(msg.format(callee, caller, _get_hex_str(mac)))
                     out_file.seek(section['sh_offset'])
                     out_file.write(mac)
                 except ValueError:
@@ -205,12 +211,12 @@ try:
         else:
             fatal_error('Incorrect tag')
     elif args.mac:
-        with open(args.in_file, 'r') as file:
+        with open(args.in_file, 'rb') as file:
             _output_data(get_sm_mac(file, args.mac, args.key))
     elif args.tag:
         _output_data(mac(args.key, args.tag))
     else:
-        with open(args.in_file, 'r') as file:
+        with open(args.in_file, 'rb') as file:
             if args.gen_sm_key:
                 _output_data(get_sm_key(file, args.gen_sm_key, args.key))
             else:
@@ -222,4 +228,4 @@ try:
 except IOError as e:
     fatal_error('Cannot open file: ' + str(e))
 except Exception as e:
-  fatal_error(str(e))
+    fatal_error(str(e))
