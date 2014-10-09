@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
 
-import config
-from common import *
+from . import config
+from . import paths
 
 import ctypes
 import struct
 import re
 import binascii
+import logging
+import argparse
+import sys
+import shutil
 
 from elftools.elf.elffile import ELFFile
 
 KEY_SIZE = config.SECURITY
 
-_lib = ctypes.cdll.LoadLibrary(get_data_path() + '/libsancus-crypto.so')
+_lib = ctypes.cdll.LoadLibrary(paths.get_data_path() + '/libsancus-crypto.so')
+
+
+class Error(Exception):
+    pass
 
 
 def _parse_hex(hex_str, size=0):
@@ -105,8 +113,8 @@ def _get_sm_identity(file, sm):
     for name in names:
         try:
             identity += _int_to_bytes(symbols[name])
-        except KeyError:
-            fatal_error('Symbol {} not found'.format(name))
+        except KeyError as e:
+            raise Error('Symbol {} not found'.format(name)) from e
     return identity
 
 def get_sm_key(file, sm, master_key):
@@ -117,12 +125,12 @@ def get_sm_mac(file, sm, key):
     return mac(key, _get_sm_identity(file, sm))
 
 
-def fill_mac_sections(file):
+def fill_mac_sections(file, output_path, key):
     elf_file = ELFFile(file)
     keys = {}
-    shutil.copy(args.in_file, args.out_file)
+    shutil.copy(file.name, output_path)
 
-    with open(args.out_file, 'rb+') as out_file:
+    with open(output_path, 'rb+') as out_file:
         for section in elf_file.iter_sections():
             name = section.name.decode('ascii')
             match = re.match(r'.data.sm.(\w+).mac.(\w+)', name)
@@ -130,71 +138,76 @@ def fill_mac_sections(file):
                 caller = match.group(1)
                 callee = match.group(2)
                 if not caller in keys:
-                    keys[caller] = get_sm_key(file, caller, args.key)
+                    keys[caller] = get_sm_key(file, caller, key)
                     hex_key = _get_hex_str(keys[caller])
-                    info('Key used for SM {}: {}'.format(caller, hex_key))
+                    msg = 'Key used for SM {}: {}'
+                    logging.info(msg.format(caller, hex_key))
 
                 try:
                     mac = get_sm_mac(file, callee, keys[caller])
                     msg = 'MAC of {} used by {}: {}'
-                    info(msg.format(callee, caller, _get_hex_str(mac)))
+                    logging.info(msg.format(callee, caller, _get_hex_str(mac)))
                     out_file.seek(section['sh_offset'])
                     out_file.write(mac)
                 except ValueError:
                     # FIXME: this is a compiler bug workaround
-                    warning('Not adding MAC for call to unknown SM {}'
-                                .format(callee))
+                    msg = 'Not adding MAC for call to unknown SM {}'
+                    logging.warning(msg.format(callee))
 
-# FIXME this should be moved to the common argument parser!
-parser = argparse.ArgumentParser()
-parser.add_argument('--verbose',
-                    help='Show information messages',
-                    action='store_true')
-parser.add_argument('--debug',
-                    help='Show debug output and keep intermediate files',
-                    action='store_true')
-parser.add_argument('--mac',
-                    help='Generate MAC for SM',
-                    metavar='SM')
-parser.add_argument('--gen-sm-key',
-                    help='Generate derived key for SM',
-                    metavar='SM')
-parser.add_argument('--key',
-                    help='{}-bit key in hexadecimal format'.format(KEY_SIZE),
-                    type=_parse_key,
-                    metavar='key',
-                    required=True)
-parser.add_argument('--gen-vendor-key',
-                    help='Generate the vendor key for the given ID',
-                    type=_parse_id,
-                    metavar='ID')
-parser.add_argument('--wrap',
-                    help='Wrap the given associated data/body pair',
-                    type=_parse_hex,
-                    nargs=2,
-                    metavar=('AD', 'BODY'))
-parser.add_argument('--unwrap',
-                    help='Wrap the given associated data/cipher/tag triplet',
-                    type=_parse_hex,
-                    nargs=3,
-                    metavar=('AD', 'CIPHER', 'TAG'))
-parser.add_argument('--tag',
-                    help='Generate a tag of the given data',
-                    type=_parse_hex,
-                    metavar='data')
-parser.add_argument('-o',
-                    help='Output file',
-                    dest='out_file',
-                    metavar='file')
-parser.add_argument('in_file',
-                    help='Input file',
-                    metavar='file',
-                    nargs='?')
 
-args = parser.parse_args()
-set_args(args)
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verbose',
+                        help='Show information messages',
+                        action='store_true')
+    parser.add_argument('--debug',
+                        help='Show debug output and keep intermediate files',
+                        action='store_true')
+    parser.add_argument('--mac',
+                        help='Generate MAC for SM',
+                        metavar='SM')
+    parser.add_argument('--gen-sm-key',
+                        help='Generate derived key for SM',
+                        metavar='SM')
+    parser.add_argument('--key',
+                        help='{}-bit key in hexadecimal format'.format(KEY_SIZE),
+                        type=_parse_key,
+                        metavar='key',
+                        required=True)
+    parser.add_argument('--gen-vendor-key',
+                        help='Generate the vendor key for the given ID',
+                        type=_parse_id,
+                        metavar='ID')
+    parser.add_argument('--wrap',
+                        help='Wrap the given associated data/body pair',
+                        type=_parse_hex,
+                        nargs=2,
+                        metavar=('AD', 'BODY'))
+    parser.add_argument('--unwrap',
+                        help='Wrap the given associated data/cipher/tag triplet',
+                        type=_parse_hex,
+                        nargs=3,
+                        metavar=('AD', 'CIPHER', 'TAG'))
+    parser.add_argument('--tag',
+                        help='Generate a tag of the given data',
+                        type=_parse_hex,
+                        metavar='data')
+    parser.add_argument('-o',
+                        help='Output file',
+                        dest='out_file',
+                        metavar='file')
+    parser.add_argument('in_file',
+                        help='Input file',
+                        metavar='file',
+                        nargs='?')
 
-try:
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+    elif args.verbose:
+        logging.getLogger().setLevel(logging.INFO)
+
     if args.gen_vendor_key:
         _output_data(mac(args.key, args.gen_vendor_key))
     elif args.wrap:
@@ -209,7 +222,7 @@ try:
         if body:
             _output_data(body)
         else:
-            fatal_error('Incorrect tag')
+            raise Error('Incorrect tag')
     elif args.mac:
         with open(args.in_file, 'rb') as file:
             _output_data(get_sm_mac(file, args.mac, args.key))
@@ -221,11 +234,18 @@ try:
                 _output_data(get_sm_key(file, args.gen_sm_key, args.key))
             else:
                 if not args.out_file:
-                    fatal_error('Requested to fill MAC sections but no ' +
+                    raise Error('Requested to fill MAC sections but no '
                                 'output file given')
                 else:
-                    fill_mac_sections(file)
-except IOError as e:
-    fatal_error('Cannot open file: ' + str(e))
-except Exception as e:
-    fatal_error(str(e))
+                    fill_mac_sections(file, args.out_file, args.key)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except IOError as e:
+        logging.error('Cannot open file: {}'.fornat(str(e)))
+        sys.exit(1)
+    except Exception as e:
+        logging.error(str(e))
+        sys.exit(1)

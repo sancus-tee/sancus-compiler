@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import sancus.paths
+
 from common import *
 
 
@@ -49,7 +51,7 @@ info('Using output file ' + out_file)
 msp_paths = get_msp_paths()
 gcc_include = msp_paths['gcc_include']
 libc_include = msp_paths['libc_include']
-sancus_includes = get_data_path() + '/include'
+sancus_includes = sancus.paths.get_data_path() + '/include'
 includes = [gcc_include, libc_include, sancus_includes]
 
 for include in includes:

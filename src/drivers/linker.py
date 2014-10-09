@@ -6,10 +6,12 @@ import string
 from elftools.elf.elffile import ELFFile
 from elftools.common.exceptions import ELFError
 
-import config
+import sancus.config
+import sancus.paths
+
 from common import *
 
-MAC_SIZE = int(config.SECURITY / 8)
+MAC_SIZE = int(sancus.config.SECURITY / 8)
 
 def rename_syms_sects(file, sym_map, sect_map):
     args = []
@@ -69,7 +71,7 @@ args, cli_ld_args = parser.parse_known_args()
 set_args(args)
 
 if args.print_default_libs:
-    lib_dir = get_data_path() + '/lib'
+    lib_dir = sancus.paths.get_data_path() + '/lib'
     print(lib_dir + '/libsancus-sm-support.a')
     if args.standalone:
         print(lib_dir + '/libsancus-host-support.a')
@@ -249,13 +251,13 @@ for sm in sms:
             mac_sections.append(mac_section.format(sm, callee, MAC_SIZE))
             id_syms += ['__sm_{}_id_{} = .;'.format(sm, callee), '. += 2;']
 
-        verify_file = rename_syms_sects(get_data_path() + '/sm_verify.o',
-                                        sym_map, sect_map)
+        object = sancus.paths.get_data_path() + '/sm_verify.o'
+        verify_file = rename_syms_sects(object, sym_map, sect_map)
         args.in_files.append(verify_file)
 
-    entry_file = rename_syms_sects(get_data_path() + '/sm_entry.o',
+    entry_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_entry.o',
                                    sym_map, sect_map)
-    exit_file = rename_syms_sects(get_data_path() + '/sm_exit.o',
+    exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_exit.o',
                                   sym_map, sect_map)
     args.in_files += [entry_file, exit_file]
 
@@ -282,7 +284,7 @@ mac_sections = '\n  '.join(mac_sections)
 symbols = '\n'.join(symbols)
 
 tmp_ldscripts_path = get_tmp_dir()
-template_path = get_data_path()
+template_path = sancus.paths.get_data_path()
 msp_paths = get_msp_paths()
 
 if args.standalone:
@@ -337,7 +339,8 @@ if not out_file:
 info('Using output file ' + out_file)
 
 ld_args = ['-L', mcu_ldscripts_path, '-L', msp_paths['lib'],
-           '-L', get_data_path() + '/lib', '-T', ldscript_name, '-o', out_file]
+           '-L', sancus.paths.get_data_path() + '/lib',
+           '-T', ldscript_name, '-o', out_file]
 ld_libs = ['-lsancus-sm-support']
 
 if args.standalone:

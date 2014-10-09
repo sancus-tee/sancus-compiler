@@ -12,10 +12,6 @@ from logging import debug, info, warning, error
 logging.basicConfig(format='%(levelname)s: %(message)s')
 
 
-def get_data_path():
-    return os.path.abspath(os.path.dirname(__file__))
-
-
 def get_msp_paths():
     base = call_prog('msp430-gcc', ['-print-file-name=ldscripts'],
                      get_output=True).decode('ascii')

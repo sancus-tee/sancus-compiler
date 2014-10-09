@@ -1,3 +1,4 @@
 #!/bin/bash
 
-@PYTHON_EXECUTABLE@ @INSTALL_BASE_DIR@/crypto.py $@
+export PYTHONPATH=@INSTALL_PYTHON_LIBS_DIR@
+@PYTHON_EXECUTABLE@ -m sancus.crypto $@
