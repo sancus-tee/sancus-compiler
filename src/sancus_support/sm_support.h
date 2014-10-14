@@ -337,4 +337,6 @@ extern char __unprotected_sp;
  */
 #define SANCUS_TAG_SIZE (SANCUS_SECURITY / 8)
 
+#undef always_inline
+
 #endif
