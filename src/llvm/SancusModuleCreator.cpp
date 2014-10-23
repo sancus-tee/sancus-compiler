@@ -42,7 +42,7 @@ struct SancusModuleCreator : ModulePass
     Instruction* getVerification(SancusModuleInfo callerInfo,
                                  SancusModuleInfo calleeInfo,
                                  Module& m);
-    GlobalVariable* getSymbolAddress(Module& m, StringRef name);
+    Constant* getSymbolAddress(Module& m, StringRef name);
     std::string fixSymbolName(const std::string& name);
     CallSite handleSancusCall(CallSite cs);
 
@@ -455,16 +455,19 @@ Instruction* SancusModuleCreator::getVerification(SancusModuleInfo callerInfo,
     return CallInst::Create(verifyStub, args);
 }
 
-GlobalVariable* SancusModuleCreator::getSymbolAddress(Module& m, StringRef name)
+Constant* SancusModuleCreator::getSymbolAddress(Module& m, StringRef name)
 {
-    if (GlobalVariable* gv = m.getGlobalVariable(name))
-        return gv;
+    GlobalVariable* gv = m.getGlobalVariable(name);
 
-    return new GlobalVariable(m, byteTy, /*isConstant=*/false,
-                              GlobalVariable::ExternalLinkage,
-                              /*Initializer=*/nullptr, name);
+    if (gv == nullptr)
+    {
+        gv = new GlobalVariable(m, byteTy, /*isConstant=*/false,
+                                GlobalVariable::ExternalLinkage,
+                                /*Initializer=*/nullptr, name);
+    }
+
+    return ConstantExpr::getBitCast(gv, voidPtrTy);
 }
-
 
 std::string SancusModuleCreator::fixSymbolName(const std::string& name)
 {
