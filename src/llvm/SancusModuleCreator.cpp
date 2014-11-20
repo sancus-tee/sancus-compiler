@@ -510,7 +510,7 @@ CallSite SancusModuleCreator::handleSancusCall(CallSite cs)
 
         // TODO FunctionCcInfo should be used to check the argument. This is not
         // possible currently since it takes a Function* as argument.
-        if (argTy->getPrimitiveSizeInBits() != 16)
+        if (argTy->getPrimitiveSizeInBits() != 16 && !argTy->isPointerTy())
             report_fatal_error("Illegal argument type in call to sancus_call");
 
         inputConstraints += ",r";
