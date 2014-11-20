@@ -35,13 +35,19 @@ bool AnnotationParser::runOnModule(llvm::Module& m)
 
         Annotation annotation;
         Constant* gvOp = annotStruct->getOperand(0);
+        GlobalValue* key;
 
-        // sanity checks
-        ConstantExpr* ce = cast<ConstantExpr>(gvOp);
-        assert(ce->isCast() || ce->isGEPWithNoNotionalOverIndexing());
-        (void)ce; // remove unused variable warnings in release build
+        if (ConstantExpr* ce = dyn_cast<ConstantExpr>(gvOp))
+        {
+            // sanity checks
+            assert(ce->isCast() || ce->isGEPWithNoNotionalOverIndexing());
+            (void)ce; // remove unused variable warnings in release build
 
-        GlobalValue* key = cast<GlobalValue>(gvOp->getOperand(0));
+            key = cast<GlobalValue>(gvOp->getOperand(0));
+        }
+        else
+            key = cast<GlobalValue>(gvOp);
+
         annotation.value = parseString(annotStruct->getOperand(1));
         annotation.file = parseString(annotStruct->getOperand(2));
         annotation.line =
