@@ -154,8 +154,9 @@ def fill_mac_sections(file, output_path, key):
                     out_file.write(mac)
                 except ValueError:
                     # FIXME: this is a compiler bug workaround
-                    msg = 'Not adding MAC for call to unknown SM {}'
-                    logging.warning(msg.format(callee))
+                    msg = 'Not adding MAC for call to unknown SM {} ' \
+                          '(FIXME: this is a compiler bug)'
+                    logging.info(msg.format(callee))
 
 
 def main():
