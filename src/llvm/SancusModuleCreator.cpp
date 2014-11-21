@@ -54,6 +54,7 @@ struct SancusModuleCreator : ModulePass
     typedef std::map<std::pair<std::string, Function*>, Function*> StubMap;
     StubMap stubs;
 
+    Module* module;
     Type* wordTy;
     Type* byteTy;
     Type* voidPtrTy;
@@ -77,6 +78,7 @@ void SancusModuleCreator::getAnalysisUsage(AnalysisUsage& au) const
 
 bool SancusModuleCreator::runOnModule(Module& m)
 {
+    module = &m;
     LLVMContext& ctx = m.getContext();
     wordTy = TypeBuilder<types::i<16>, true>::get(ctx);
     byteTy = TypeBuilder<types::i<8>, true>::get(ctx);
@@ -376,25 +378,48 @@ SancusModuleInfo SancusModuleCreator::getSancusModuleInfo(const GlobalValue* gv)
     if (it != modulesInfo.end())
         return it->second;
 
-    AnnotationParser& ap = getAnalysis<AnnotationParser>();
+    auto& ap = getAnalysis<AnnotationParser>();
     SancusModuleInfo info;
-    for (const Annotation& annot : ap.getAnnotations(gv))
+    const auto annotations = ap.getAnnotations(gv);
+
+    if (annotations.size() > 0)
     {
-        auto pair = annot.value.split(':');
-        if (pair.second.empty())
-            continue;
+        // check if the annotations are consistent
+        auto ref = annotations.front();
+        auto isOk = true;
 
-        if (pair.first == "sm_entry")
-            info.isEntry = true;
-        else if (pair.first != "sm")
-            continue;
+        for (auto it = annotations.begin() + 1; it < annotations.end(); ++it)
+        {
+            auto annotation = *it;
 
-        // found SM annotation, check if it is the only one
-        if (info.isInSm)
-            report_fatal_error("Multiple SM annotations on " + gv->getName());
+            if (annotation.value != ref.value)
+            {
+                std::stringstream msg;
+                msg << annotation.file.str() << ":" << annotation.line << ": "
+                    << "Annotation '" << annotation.value.str()
+                    << "' on function '" << gv->getName().str()
+                    << "' is inconsistent with the previous annotation '"
+                    << ref.value.str();
 
-        info.name = fixSymbolName(pair.second);
-        info.isInSm = true;
+                module->getContext().emitError(msg.str());
+                isOk = false;
+                break;
+            }
+        }
+
+        if (isOk)
+        {
+            auto pair = ref.value.split(':');
+
+            // ignore invalid annotations
+            if (!pair.second.empty() &&
+                (pair.first == "sm" || pair.first == "sm_entry"))
+            {
+                info.isEntry = pair.first == "sm_entry";
+                info.name = fixSymbolName(pair.second);
+                info.isInSm = true;
+            }
+        }
     }
 
     modulesInfo.insert({gv, info});
