@@ -308,6 +308,16 @@ extern char __unprotected_sp;
 #define SM_DATA(name)  SM_FUNC(name)
 
 /**
+ * Macro to get the index of entry point @p entry of SM @p sm.
+ *
+ * Both arguments should be names without quotes.
+ */
+#define SM_GET_ENTRY_IDX(sm, entry) ({              \
+    extern char __sm_##sm##_entry_##entry##_idx;    \
+    (entry_idx)&__sm_##sm##_entry_##entry##_idx;    \
+})
+
+/**
  * Interrupt vector for the Sancus violation ISR.
  *
  * Use as follows:
