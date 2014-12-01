@@ -318,6 +318,16 @@ extern char __unprotected_sp;
 })
 
 /**
+ * Macro to get a pointer to the tag used by @p caller to verify @p callee.
+ *
+ * Both arguments should be names without quotes.
+ */
+#define SM_GET_TAG(caller, callee) ({           \
+    extern char __sm_##caller##_mac_##callee;   \
+    (void*)&__sm_##caller##_mac_##callee;       \
+})
+
+/**
  * Interrupt vector for the Sancus violation ISR.
  *
  * Use as follows:
