@@ -85,7 +85,7 @@ else:
     call_prog('opt', opt_args)
 
     assembly = get_tmp('.s')
-    llc_opt = '-O' + ('0' if args.optimization == 's' else args.optimization)
+    llc_opt = '-O' + ('2' if args.optimization == 's' else args.optimization)
     llc_args = [llc_opt, '-msp430-hwmult-mode=no', '-o', assembly, opt_bc]
     call_prog('llc', llc_args)
 
