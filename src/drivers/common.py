@@ -45,10 +45,6 @@ def get_common_parser():
                         help='Input file(s)',
                         nargs='*',
                         metavar='file')
-    parser.add_argument('-mmcu',
-                        help='Specify MCU type',
-                        dest='mcu',
-                        metavar='mcu')
     return parser
 
 

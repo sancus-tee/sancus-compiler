@@ -34,6 +34,9 @@ parser.add_argument('-O',
 args, cc_args = parser.parse_known_args()
 set_args(args)
 
+# Since we define our own MCU, remove the -mmcu argument.
+cc_args = [a for a in cc_args if not a.startswith('-mmcu')]
+
 if len(args.in_files) != 1:
     fatal_error('Exactly 1 input file is required')
 if not args.compile_only:
@@ -59,14 +62,7 @@ for include in includes:
 
 info('Using include paths: {}'.format(', '.join(includes)))
 
-if args.mcu:
-    mcu_define = '__' + args.mcu.upper() + '__'
-else:
-    mcu_define = '__MSP430F149__'
-
-cc_args += ['-D' + mcu_define]
-info('Using MCU define ' + mcu_define)
-
+cc_args += ['-D__MSP430F149__']
 cc_args.append('-O' + args.optimization)
 as_args = []
 

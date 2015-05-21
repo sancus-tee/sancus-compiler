@@ -70,6 +70,9 @@ parser.add_argument('--print-default-libs',
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
 
+# Since we create our own linker script, remove the -mmcu argument.
+cli_ld_args = [a for a in cli_ld_args if not a.startswith('-mmcu')]
+
 if args.print_default_libs:
     lib_dir = sancus.paths.get_data_path() + '/lib'
     print(lib_dir + '/libsancus-sm-support.a')
@@ -288,29 +291,20 @@ template_path = sancus.paths.get_data_path()
 msp_paths = get_msp_paths()
 
 if args.standalone:
-    if args.mcu:
-        ldscripts_path = msp_paths['ldscripts']
-        mcu_ldscripts_path = ldscripts_path + '/' + args.mcu
+    mcu_ldscripts_path = tmp_ldscripts_path
+    shutil.copy(template_path + '/periph.x', mcu_ldscripts_path)
 
-        if os.path.exists(mcu_ldscripts_path):
-            info('Using linker scripts path: ' + mcu_ldscripts_path)
-        else:
-            fatal_error('No linker scripts found for MCU ' + args.mcu)
-    else:
-        mcu_ldscripts_path = tmp_ldscripts_path
-        shutil.copy(template_path + '/periph.x', mcu_ldscripts_path)
+    ram_length = parse_size(args.ram_size)
+    rom_length = parse_size(args.rom_size)
+    rom_origin = 0x10000 - rom_length
+    with open(template_path + '/memory.x', 'r') as memscript:
+        template = string.Template(memscript.read())
 
-        ram_length = parse_size(args.ram_size)
-        rom_length = parse_size(args.rom_size)
-        rom_origin = 0x10000 - rom_length
-        with open(template_path + '/memory.x', 'r') as memscript:
-            template = string.Template(memscript.read())
-
-        contents = template.substitute(ram_length=ram_length,
-                                       rom_length=rom_length,
-                                       rom_origin=rom_origin)
-        with open(mcu_ldscripts_path + '/memory.x', 'w') as memscript:
-            memscript.write(contents)
+    contents = template.substitute(ram_length=ram_length,
+                                    rom_length=rom_length,
+                                    rom_origin=rom_origin)
+    with open(mcu_ldscripts_path + '/memory.x', 'w') as memscript:
+        memscript.write(contents)
 
     with open(template_path + '/msp430.x', 'r') as ldscript:
         template = string.Template(ldscript.read())
