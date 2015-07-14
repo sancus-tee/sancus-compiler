@@ -152,9 +152,8 @@ bool SancusModuleCreator::handleFunction(Function& f)
                     continue;
             }
 
-            DebugLoc loc = inst->getDebugLoc();
             std::string locStr;
-            if (!loc.isUnknown())
+            if (auto loc = inst->getDebugLoc())
             {
                 Twine t(" (" + Twine(loc.getLine()) + ":" +
                         Twine(loc.getCol()) + ")");
