@@ -145,16 +145,17 @@ always_inline sm_id sancus_verify_caller(const void* expected_tag)
 /**
  * Wrap a message using the Sancus authenticated encryption features.
  *
- * @p body_len bytes of data starting at @p body are wrapped using the key of
- * the current module using @p ad_len of associated data starting at @p ad. The
- * resulting cipher text is written to @p cipher (make sure there is a buffer
- * available of at least @p body_len bytes) and the MAC to @p tag (the needed
- * buffer size depends of the amount of security bits the Sancus core has been
- * synthesized with).
+ * @p body_len bytes of data starting at @p body are wrapped using the key
+ * @p key and @p ad_len of associated data starting at @p ad. The resulting
+ * cipher text is written to @p cipher (make sure there is a buffer available
+ * of at least @p body_len bytes) and the MAC to @p tag (the needed buffer size
+ * depends of the amount of security bits the Sancus core has been synthesized
+ * with).
  */
-always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
-                                const void* body, size_t body_len,
-                                void* cipher, void* tag)
+always_inline sm_id sancus_wrap_with_key(const void* key,
+                                         const void* ad, size_t ad_len,
+                                         const void* body, size_t body_len,
+                                         void* cipher, void* tag)
 {
     void* ad_end = (char*)ad + ad_len;
     void* body_end = (char*)body + body_len;
@@ -162,31 +163,47 @@ always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
 
     // we use memory constraints for all operands because otherwise LLVM's
     // register allocator messes up and uses some of the clobbered registers
-    asm("mov %1, r10\n\t"
-        "mov %2, r11\n\t"
-        "mov %3, r12\n\t"
-        "mov %4, r13\n\t"
-        "mov %5, r14\n\t"
-        "mov %6, r15\n\t"
+    asm("mov %1, r9\n\t"
+        "mov %2, r10\n\t"
+        "mov %3, r11\n\t"
+        "mov %4, r12\n\t"
+        "mov %5, r13\n\t"
+        "mov %6, r14\n\t"
+        "mov %7, r15\n\t"
         ".word 0x1384\n\t"
         "mov r15, %0"
         : "=m"(ret)
-        :"m"(ad), "m"(ad_end),
-         "m"(body), "m"(body_end),
-         "m"(cipher), "m"(tag)
-        : "r10", "r11", "r12", "r13", "r14", "r15");
+        : "m"(key),
+          "m"(ad), "m"(ad_end),
+          "m"(body), "m"(body_end),
+          "m"(cipher), "m"(tag)
+        : "r9", "r10", "r11", "r12", "r13", "r14", "r15");
 
     return ret;
 }
 
 /**
+ * Wrap a message using the Sancus authenticated encryption features.
+ *
+ * This is the same as sancus_wrap_with_key using the key of the caller module.
+ */
+always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
+                                const void* body, size_t body_len,
+                                void* cipher, void* tag)
+{
+    return sancus_wrap_with_key(NULL, ad, ad_len, body, body_len, cipher, tag);
+}
+
+/**
  * Unwrap a message using the Sancus authenticated encryption features.
  *
- * See sancus_wrap() for an explanation of the parameters.
+ * See sancus_wrap_with_key() for an explanation of the parameters.
  */
-always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
-                                  const void* cipher, size_t cipher_len,
-                                  const void* tag, void* body)
+always_inline sm_id sancus_unwrap_with_key(const void* key,
+                                           const void* ad, size_t ad_len,
+                                           const void* cipher,
+                                           size_t cipher_len,
+                                           const void* tag, void* body)
 {
     void* ad_end = (char*)ad + ad_len;
     void* cipher_end = (char*)cipher + cipher_len;
@@ -194,21 +211,37 @@ always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
 
     // we use memory constraints for all operands because otherwise LLVM's
     // register allocator messes up and uses some of the clobbered registers
-    asm("mov %1, r10\n\t"
-        "mov %2, r11\n\t"
-        "mov %3, r12\n\t"
-        "mov %4, r13\n\t"
-        "mov %5, r14\n\t"
-        "mov %6, r15\n\t"
+    asm("mov %1, r9\n\t"
+        "mov %2, r10\n\t"
+        "mov %3, r11\n\t"
+        "mov %4, r12\n\t"
+        "mov %5, r13\n\t"
+        "mov %6, r14\n\t"
+        "mov %7, r15\n\t"
         ".word 0x1385\n\t"
         "mov r15, %0"
         : "=m"(ret)
-        :"m"(ad), "m"(ad_end),
-         "m"(cipher), "m"(cipher_end),
-         "m"(body), "m"(tag)
-        : "r10", "r11", "r12", "r13", "r14", "r15");
+        : "m"(key),
+          "m"(ad), "m"(ad_end),
+          "m"(cipher), "m"(cipher_end),
+          "m"(body), "m"(tag)
+        : "r9", "r10", "r11", "r12", "r13", "r14", "r15");
 
     return ret;
+}
+
+/**
+ * Unwrap a message using the Sancus authenticated encryption features.
+ *
+ * This is the same as sancus_unwrap_with_key using the key of the caller
+ * module.
+ */
+always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
+                                  const void* cipher, size_t cipher_len,
+                                  const void* tag, void* body)
+{
+    return sancus_unwrap_with_key(NULL, ad, ad_len, cipher, cipher_len,
+                                  tag, body);
 }
 
 /**
