@@ -342,7 +342,14 @@ if args.standalone:
     ld_args += args.in_files + cli_ld_args + ld_libs
     call_prog('msp430-gcc', ld_args)
 else:
+    # Since we are calling ld directly we have to transform all the -Wl options
+    for arg in cli_ld_args:
+        if arg.startswith('-Wl'):
+            ld_args += arg.split(',')[1:]
+        else:
+            ld_args.append(arg)
+
     # -d makes sure no COMMON symbols are created since these are annoying to
     # handle in the dynamic loader (and pretty useless anyway)
-    ld_args += ['-r', '-d'] + args.in_files + cli_ld_args + ld_libs
+    ld_args += ['-r', '-d'] + args.in_files + ld_libs
     call_prog('msp430-ld', ld_args)
