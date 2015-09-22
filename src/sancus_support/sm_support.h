@@ -390,6 +390,11 @@ extern char __unprotected_sp;
  */
 #define SANCUS_TAG_SIZE (SANCUS_SECURITY / 8)
 
+/**
+ * The size of the keys used by the crypto functions.
+ */
+#define SANCUS_KEY_SIZE (SANCUS_SECURITY / 8)
+
 #undef always_inline
 
 #endif
