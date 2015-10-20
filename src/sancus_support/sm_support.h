@@ -288,7 +288,9 @@ always_inline sm_id sancus_get_caller_id(void)
     sm_id ret;
     asm(".word 0x1387\n\t"
         "mov r15, %0"
-        : "=m"(ret));
+        : "=m"(ret)
+        :
+        : "r15");
     return ret;
 }
 
