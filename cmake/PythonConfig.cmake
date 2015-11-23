@@ -1,7 +1,7 @@
 find_package(PythonInterp 3.0.0 REQUIRED)
 
 function(find_python_module mod)
-    execute_process(COMMAND python -c "import ${mod}"
+    execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import ${mod}"
                     RESULT_VARIABLE res
                     OUTPUT_QUIET
                     ERROR_QUIET)
