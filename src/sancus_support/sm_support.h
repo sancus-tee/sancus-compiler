@@ -320,14 +320,14 @@ extern char __unprotected_sp;
  * void SM_ENTRY("mod_name") entry_name(void) {...}
  * @endcode
  */
-#define SM_ENTRY(name) __ANNOTATE("sm_entry:" name) __attribute__((noinline, used))
+#define SM_ENTRY(name) __ANNOTATE("sm_entry:" #name) __attribute__((noinline, used))
 
 /**
  * Annotation for internal module function (i.e., not entry points).
  *
  * @see SM_ENTRY()
  */
-#define SM_FUNC(name)  __ANNOTATE("sm:" name)
+#define SM_FUNC(name)  __ANNOTATE("sm:" #name)
 
 /**
  * Annotation for data the should be part of the secret section.
