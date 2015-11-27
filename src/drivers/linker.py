@@ -269,10 +269,11 @@ for sm in sms:
     data_sections.append(data_section.format(sm, '\n    '.join(id_syms),
                                              args.sm_stack_size))
 
-    symbols.append('{} = {};'.format(nentries, len(sms_entries[sm])))
-    for idx, entry in enumerate(sms_entries[sm]):
-        sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry)
-        symbols.append('{} = {};'.format(sym_name, idx))
+    if sm in sms_entries:
+        symbols.append('{} = {};'.format(nentries, len(sms_entries[sm])))
+        for idx, entry in enumerate(sms_entries[sm]):
+            sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry)
+            symbols.append('{} = {};'.format(sym_name, idx))
 
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))
