@@ -30,6 +30,9 @@ parser.add_argument('-O',
                     help='Set optimization level',
                     choices=['0', '1', '2', '3', 's'],
                     default='0')
+parser.add_argument('--opt-plugin',
+                    help='Specify the opt plugin file to use',
+                    default='SancusModuleCreator.so')
 
 args, cc_args = parser.parse_known_args()
 set_args(args)
@@ -76,7 +79,7 @@ else:
     call_prog('clang', cc_args)
 
     opt_bc = get_tmp('.bc')
-    opt_args = ['--load', 'SancusModuleCreator.so', '--create-sm',
+    opt_args = ['--load', args.opt_plugin, '--create-sm',
                 '-o', opt_bc, init_bc]
     call_prog('opt', opt_args)
 
