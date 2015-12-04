@@ -12,6 +12,14 @@ import sancus.paths
 from common import *
 
 MAC_SIZE = int(sancus.config.SECURITY / 8)
+KEY_SIZE = MAC_SIZE
+
+
+class SmEntry:
+    def __init__(self, name, file_name):
+        self.name = name
+        self.file_name = file_name
+
 
 def rename_syms_sects(file, sym_map, sect_map):
     args = []
@@ -36,14 +44,72 @@ def parse_size(val):
         return int(match.group(1)) * 1024
 
 
-def get_symbol(elf_file, name):
+def iter_symbols(elf_file):
     from elftools.elf.elffile import SymbolTableSection
     for section in elf_file.iter_sections():
         if isinstance(section, SymbolTableSection):
-            for symbol in section.iter_symbols():
-                sym_section = symbol['st_shndx']
-                if symbol.name == name and sym_section != 'SHN_UNDEF':
-                    return symbol
+            yield from section.iter_symbols()
+
+
+def get_symbol(elf_file, name):
+    for symbol in iter_symbols(elf_file):
+        sym_section = symbol['st_shndx']
+        if symbol.name == name and sym_section != 'SHN_UNDEF':
+            return symbol
+
+
+def get_io_sym_map(sm_name):
+    sym_map = {
+        '__sm_handle_input':    '__sm_{}_handle_input'.format(sm_name),
+        '__sm_num_inputs':      '__sm_{}_num_inputs'.format(sm_name),
+        '__sm_num_connections': '__sm_{}_num_connections'.format(sm_name),
+        '__sm_io_keys':         '__sm_{}_io_keys'.format(sm_name),
+        '__sm_input_callbacks': '__sm_{}_input_callbacks'.format(sm_name),
+        '__sm_output_nonce':    '__sm_{}_output_nonce'.format(sm_name),
+        '__sm_send_output':     '__sm_{}_send_output'.format(sm_name),
+        '__sm_set_key':         '__sm_{}_set_key'.format(sm_name),
+        '__sm_X_exit':          '__sm_{}_exit'.format(sm_name),
+        '__sm_X_stub_malloc':   '__sm_{}_stub_malloc'.format(sm_name),
+        '__sm_X_stub_reactive_handle_output':
+            '__sm_{}_stub_reactive_handle_output'.format(sm_name)
+    }
+
+    return sym_map
+
+
+def get_io_sect_map(sm_name):
+    return {
+        '.sm.X.text':       '.sm.{}.text'.format(sm_name),
+        '.rela.sm.X.text':  '.rela.sm.{}.text'.format(sm_name),
+        '.sm.X.table':      '.sm.{}.table'.format(sm_name),
+        '.rela.sm.X.table': '.rela.sm.{}.table'.format(sm_name),
+    }
+
+
+def get_stub_path(stub_name):
+    return '{}/{}'.format(sancus.paths.get_data_path(), stub_name)
+
+
+def create_io_stub(sm, stub):
+    debug('Adding I/O stub {}'.format(stub))
+
+    return rename_syms_sects(get_stub_path(stub),
+                             get_io_sym_map(sm), get_io_sect_map(sm))
+
+
+def sort_entries(entries):
+    # If the set_key entry exists, it should have index 0 and if the
+    # handle_input entry exists, it should have index 1. This is accomplished by
+    # mapping those entries to __ and ___ respectively since those come
+    # alphabetically before any valid entry name.
+    def sort_key(entry):
+        if re.match(r'__sm_\w+_set_key', entry.name):
+            return '__'
+        if re.match(r'__sm_\w+_handle_input', entry.name):
+            return '___'
+        return entry.name
+
+    entries.sort(key=sort_key)
 
 
 parser = argparse.ArgumentParser(description='Sancus module linker.',
@@ -82,13 +148,24 @@ if args.print_default_libs:
 
 # find all defined SMs
 sms = set()
-sms_table_order = {}
 sms_entries = {}
 sms_calls = {}
+sms_inputs = {}
+sms_outputs = {}
 existing_sms = set()
 existing_macs = []
 
-for file_name in args.in_files:
+added_set_key_stub = False
+added_input_stub = False
+added_output_stub = False
+
+input_files = args.in_files[:]
+i = 0
+
+while i < len(input_files):
+    file_name = input_files[i]
+    i += 1
+
     try:
         with open(file_name, 'rb') as file:
             elf_file = ELFFile(file)
@@ -109,11 +186,9 @@ for file_name in args.in_files:
                 match = re.match(r'.rela.sm.(\w+).table', name)
                 if match:
                     sm_name = match.group(1)
-                    if not sm_name in sms_table_order:
-                        sms_table_order[sm_name] = []
-                        sms_entries[sm_name] = []
 
-                    sms_table_order[sm_name].append(file_name)
+                    if not sm_name in sms_entries:
+                        sms_entries[sm_name] = []
 
                     #find entry points of the SM in this file
                     symtab = elf_file.get_section(section['sh_link'])
@@ -122,7 +197,8 @@ for file_name in args.in_files:
                                     for rel in section.iter_relocations()]
                     entries.sort()
                     sms_entries[sm_name] += \
-                        [entry.decode('ascii') for _, entry in entries]
+                        [SmEntry(entry.decode('ascii'), file_name)
+                            for _, entry in entries]
                     continue
 
                 match = re.match(r'.rela.sm.(\w+).text', name)
@@ -145,25 +221,73 @@ for file_name in args.in_files:
                 if match:
                     existing_macs.append((match.group(1), match.group(2)))
                     continue
+
+            # Find the tag symbols used to identify inputs/outputs.
+            # We also add the necessary stubs to the input files so that they
+            # will be scanned for extra entry points later.
+            for symbol in iter_symbols(elf_file):
+                name = symbol.name.decode('ascii')
+                match = re.match(r'__sm_(\w+)_(input|output)_tag_(\w+)', name)
+
+                if match:
+                    sm, which, name = match.groups()
+
+                    if not added_set_key_stub:
+                        input_files.append(create_io_stub(sm, 'sm_set_key.o'))
+                        added_set_key_stub = True
+
+                    if which == 'input':
+                        dest = sms_inputs
+
+                        if not added_input_stub:
+                            input_files.append(create_io_stub(sm, 'sm_input.o'))
+                            added_input_stub = True
+                    else:
+                        dest = sms_outputs
+
+                        if not added_output_stub:
+                            input_files.append(create_io_stub(sm,
+                                                              'sm_output.o'))
+                            added_output_stub = True
+
+                    if not sm in dest:
+                        dest[sm] = []
+
+                    dest[sm].append(name)
     except IOError as e:
         fatal_error(str(e))
     except ELFError as e:
         debug('Not checking {} for SMs because it is not a valid '
               'ELF file ({})'.format(file_name, e))
 
+for sm in sms_entries:
+    sort_entries(sms_entries[sm])
+
 if len(sms) > 0:
     info('Found new Sancus modules:')
     for sm in sms:
         info(' * {}:'.format(sm))
+
         if sm in sms_entries:
-            #entry_names = [entry.decode('ascii') for entry in sms_entries[sm]]
-            info('  - Entries: {}'.format(', '.join(sms_entries[sm])))
+            entry_names = [entry.name for entry in sms_entries[sm]]
+            info('  - Entries: {}'.format(', '.join(entry_names)))
         else:
             info('  - No entries')
+
         if sm in sms_calls:
             info('  - Calls:   {}'.format(', '.join(sms_calls[sm])))
         else:
             info('  - No calls to other modules')
+
+        if sm in sms_inputs:
+            info('  - Inputs:  {}'.format(', '.join(sms_inputs[sm])))
+        else:
+            info('  - No inputs')
+
+        if sm in sms_outputs:
+            info('  - Outputs:  {}'.format(', '.join(sms_outputs[sm])))
+        else:
+            info('  - No outputs')
 else:
     info('No new Sancus modules found')
 
@@ -186,6 +310,7 @@ text_section = '''.text.sm.{0} :
     __sm_{0}_table = .;
     {3}
     . = ALIGN(2);
+    {4}
     __sm_{0}_public_end = .;
   }}'''
 
@@ -198,6 +323,8 @@ data_section = '''. = ALIGN(2);
     __sm_{0}_sp = .;
     . += 2;
     . = ALIGN(2);
+    {3}
+    {4}
     __sm_{0}_secret_end = .;'''
 
 mac_section = '''.data.sm.{0}.mac.{1} :
@@ -244,9 +371,9 @@ for sm in sms:
     sect_map = {'.sm.text' : '.sm.{}.text'.format(sm)}
 
     tables = []
-    if sm in sms_table_order:
-        tables = ['{}(.sm.{}.table)'.format(file, sm)
-                      for file in sms_table_order[sm]]
+    if sm in sms_entries:
+        tables = ['{}(.sm.{}.table)'.format(entry.file_name, sm)
+                      for entry in sms_entries[sm]]
 
     id_syms = []
     if sm in sms_calls:
@@ -256,24 +383,87 @@ for sm in sms:
 
         object = sancus.paths.get_data_path() + '/sm_verify.o'
         verify_file = rename_syms_sects(object, sym_map, sect_map)
-        args.in_files.append(verify_file)
+        input_files.append(verify_file)
 
     entry_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_entry.o',
                                    sym_map, sect_map)
     exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_exit.o',
                                   sym_map, sect_map)
-    args.in_files += [entry_file, exit_file]
+    input_files += [entry_file, exit_file]
+
+    # Some convenience variables for the inputs/outputs
+    inputs  = sms_inputs[sm]  if sm in sms_inputs  else []
+    outputs = sms_outputs[sm] if sm in sms_outputs else []
+    ios     = inputs + outputs
+
+    # Table of function pointers for the inputs
+    input_callbacks = ''
+
+    if len(inputs) > 0:
+        input_callbacks += '__sm_{}_input_callbacks = .;\n'.format(sm)
+
+        # The SHORT linker function does not output relocation information for
+        # the added symbols. We work around this issue by generating and
+        # compiling a C file that includes all the callbacks.
+        contents = ''
+
+        for input in inputs:
+            # TODO This does not work (see comment above). However, if a way is
+            # found to make SHORT output relocation information, this should be
+            # done since it is way less hacky.
+            # input_callbacks += '    SHORT({});\n'.format(input)
+            contents += 'extern int {0};\n' \
+                        'static __attribute__((section(".sm.{1}.callbacks")))' \
+                        'int* __sm_{1}_callback_{0} = &{0};' \
+                            .format(input, sm)
+
+        c_file = get_tmp('.c')
+        o_file = get_tmp('.o')
+
+        with open(c_file, 'w') as f:
+            f.write(contents)
+
+        call_prog('msp430-gcc', ['-c', '-o', o_file, c_file])
+
+        input_callbacks += '    {}(.sm.{}.callbacks)\n'.format(o_file, sm)
+        input_callbacks += '    . = ALIGN(2);'
+
+    # Table of connection keys
+    io_keys = ''
+
+    if len(ios) > 0:
+        io_keys += '__sm_{}_io_keys = .;\n'.format(sm)
+        io_keys += '    . += {};\n'.format(len(ios) * KEY_SIZE)
+        io_keys += '    . = ALIGN(2);'
+
+    # Nonce used by outputs
+    outputs_nonce = ''
+
+    if len(outputs) > 0:
+        outputs_nonce += '__sm_{}_output_nonce = .;\n'.format(sm)
+        outputs_nonce += '    . += 2;\n'
+        outputs_nonce += '    . = ALIGN(2);'
 
     text_sections.append(text_section.format(sm, entry_file, exit_file,
-                                             '\n    '.join(tables)))
+                                             '\n    '.join(tables),
+                                             input_callbacks))
     data_sections.append(data_section.format(sm, '\n    '.join(id_syms),
-                                             args.sm_stack_size))
+                                             args.sm_stack_size, io_keys,
+                                             outputs_nonce))
 
     if sm in sms_entries:
         symbols.append('{} = {};'.format(nentries, len(sms_entries[sm])))
         for idx, entry in enumerate(sms_entries[sm]):
-            sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry)
+            sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry.name)
             symbols.append('{} = {};'.format(sym_name, idx))
+
+    # Add a symbol for the index of every input/output
+    for index, io in enumerate(ios):
+        symbols.append('__sm_{}_io_{}_idx = {};'.format(sm, io, index))
+
+    # Add symbols for the number of connections/inputs
+    symbols.append('__sm_{}_num_connections = {};'.format(sm, len(ios)))
+    symbols.append('__sm_{}_num_inputs = {};'.format(sm, len(inputs)))
 
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))
@@ -340,7 +530,7 @@ ld_libs = ['-lsancus-sm-support']
 
 if args.standalone:
     ld_libs += ['-lsancus-host-support']
-    ld_args += args.in_files + cli_ld_args + ld_libs
+    ld_args += input_files + cli_ld_args + ld_libs
     call_prog('msp430-gcc', ld_args)
 else:
     # Since we are calling ld directly we have to transform all the -Wl options
@@ -352,5 +542,5 @@ else:
 
     # -d makes sure no COMMON symbols are created since these are annoying to
     # handle in the dynamic loader (and pretty useless anyway)
-    ld_args += ['-r', '-d'] + args.in_files + ld_libs
+    ld_args += ['-r', '-d'] + input_files + ld_libs
     call_prog('msp430-ld', ld_args)

@@ -20,5 +20,5 @@ install(TARGETS sancus-sm-support
 install(TARGETS sancus-host-support
         EXPORT ExportTargets
         ARCHIVE DESTINATION ${INSTALL_LIBS_DIR})
-install(FILES sm_support.h
+install(FILES sm_support.h reactive.h
         DESTINATION "${INSTALL_INCLUDES_DIR}/sancus")

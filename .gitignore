@@ -4,3 +4,4 @@ build/
 *.pyc
 *~
 *.swp
+.kdev_include_paths
