@@ -1,6 +1,6 @@
 #include "sm_support.h"
 
-int sancus_enable(struct SancusModule* sm)
+sm_id sancus_enable(struct SancusModule* sm)
 {
     asm("mov %1, r11\n\t"
         "mov %2, r12\n\t"
@@ -15,5 +15,5 @@ int sancus_enable(struct SancusModule* sm)
           "m"(sm->secret_start), "m"(sm->secret_end)
         : "r11", "r12", "r13", "r14", "r15");
 
-    return sm->id != 0;
+    return sm->id;
 }

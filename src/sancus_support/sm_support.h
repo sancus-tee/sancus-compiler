@@ -75,9 +75,9 @@ struct SancusModule
  * @param sm Pointer to a SancusModule to enable. This is typically created by
  *           taking the address of the name defined by DECLARE_SM().
  *
- * @return   A true value iff the protection was successfully enabled.
+ * @return   The ID of the enabled SM. 0 on error.
  */
-int sancus_enable(struct SancusModule* sm);
+sm_id sancus_enable(struct SancusModule* sm);
 
 #define always_inline static inline __attribute__((always_inline))
 
@@ -94,10 +94,10 @@ always_inline void sancus_disable()
  *
  * @see sancus_verify()
  */
-always_inline sm_id sancus_verify_address(const void* expected_tag,
+always_inline int sancus_verify_address(const void* expected_tag,
                                           const void* address)
 {
-    sm_id ret;
+    int ret;
     asm("mov %1, r14\n\t"
         "mov %2, r15\n\t"
         ".word 0x1382\n\t"
@@ -117,9 +117,11 @@ always_inline sm_id sancus_verify_address(const void* expected_tag,
  *
  * Note that this function normally should not be called directly; the compiler
  * will insert verification code on inter-module calls.
+ *
+ * @return True iff the verification succeeded.
  */
-always_inline sm_id sancus_verify(const void* expected_tag,
-                                  struct SancusModule* sm)
+always_inline int sancus_verify(const void* expected_tag,
+                                struct SancusModule* sm)
 {
     return sancus_verify_address(expected_tag, sm->public_start);
 }
@@ -129,10 +131,12 @@ always_inline sm_id sancus_verify(const void* expected_tag,
  *
  * Correctness is defined as with sancus_verify(). See sancus_get_caller_id()
  * for the definition of the calling module.
+ *
+ * @return True iff the verification succeeded.
  */
-always_inline sm_id sancus_verify_caller(const void* expected_tag)
+always_inline int sancus_verify_caller(const void* expected_tag)
 {
-    sm_id ret;
+    int ret;
     asm("mov %1, r15\n\t"
         ".word 0x1383\n\t"
         "mov r15, %0"
@@ -151,15 +155,17 @@ always_inline sm_id sancus_verify_caller(const void* expected_tag)
  * of at least @p body_len bytes) and the MAC to @p tag (the needed buffer size
  * depends of the amount of security bits the Sancus core has been synthesized
  * with).
+ *
+ * @return True iff the wrapping succeeded.
  */
-always_inline sm_id sancus_wrap_with_key(const void* key,
-                                         const void* ad, size_t ad_len,
-                                         const void* body, size_t body_len,
-                                         void* cipher, void* tag)
+always_inline int sancus_wrap_with_key(const void* key,
+                                       const void* ad, size_t ad_len,
+                                       const void* body, size_t body_len,
+                                       void* cipher, void* tag)
 {
     void* ad_end = (char*)ad + ad_len;
     void* body_end = (char*)body + body_len;
-    sm_id ret;
+    int ret;
 
     // we use memory constraints for all operands because otherwise LLVM's
     // register allocator messes up and uses some of the clobbered registers
@@ -187,9 +193,9 @@ always_inline sm_id sancus_wrap_with_key(const void* key,
  *
  * This is the same as sancus_wrap_with_key using the key of the caller module.
  */
-always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
-                                const void* body, size_t body_len,
-                                void* cipher, void* tag)
+always_inline int sancus_wrap(const void* ad, size_t ad_len,
+                              const void* body, size_t body_len,
+                              void* cipher, void* tag)
 {
     return sancus_wrap_with_key(NULL, ad, ad_len, body, body_len, cipher, tag);
 }
@@ -199,15 +205,15 @@ always_inline sm_id sancus_wrap(const void* ad, size_t ad_len,
  *
  * See sancus_wrap_with_key() for an explanation of the parameters.
  */
-always_inline sm_id sancus_unwrap_with_key(const void* key,
-                                           const void* ad, size_t ad_len,
-                                           const void* cipher,
-                                           size_t cipher_len,
-                                           const void* tag, void* body)
+always_inline int sancus_unwrap_with_key(const void* key,
+                                         const void* ad, size_t ad_len,
+                                         const void* cipher,
+                                         size_t cipher_len,
+                                         const void* tag, void* body)
 {
     void* ad_end = (char*)ad + ad_len;
     void* cipher_end = (char*)cipher + cipher_len;
-    sm_id ret;
+    int ret;
 
     // we use memory constraints for all operands because otherwise LLVM's
     // register allocator messes up and uses some of the clobbered registers
@@ -236,9 +242,9 @@ always_inline sm_id sancus_unwrap_with_key(const void* key,
  * This is the same as sancus_unwrap_with_key using the key of the caller
  * module.
  */
-always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
-                                  const void* cipher, size_t cipher_len,
-                                  const void* tag, void* body)
+always_inline int sancus_unwrap(const void* ad, size_t ad_len,
+                                const void* cipher, size_t cipher_len,
+                                const void* tag, void* body)
 {
     return sancus_unwrap_with_key(NULL, ad, ad_len, cipher, cipher_len,
                                   tag, body);
@@ -247,7 +253,7 @@ always_inline sm_id sancus_unwrap(const void* ad, size_t ad_len,
 /**
  * The same as sancus_wrap() but only produces the MAC of the message.
  */
-always_inline sm_id sancus_tag(const void* body, size_t body_len, void* tag)
+always_inline int sancus_tag(const void* body, size_t body_len, void* tag)
 {
     return sancus_wrap(body, body_len, NULL, 0, NULL, tag);
 }
