@@ -197,7 +197,6 @@ def wrap_sm_text_sections(file, output_path, key):
                             '--prepare-for-sm-text-section-wrapping?')
 
             wrapinfo_data = nonce + tag
-            print(wrapinfo_data)
             out_file.seek(wrapinfo_section['sh_offset'])
             out_file.write(wrapinfo_data)
 
