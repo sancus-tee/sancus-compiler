@@ -79,6 +79,11 @@ struct SancusModule
  */
 sm_id sancus_enable(struct SancusModule* sm);
 
+/**
+ * Enables the protection of the given encrypted module.
+ */
+sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
+
 #define always_inline static inline __attribute__((always_inline))
 
 /**
