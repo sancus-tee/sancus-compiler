@@ -129,6 +129,10 @@ parser.add_argument('--sm-stack-size',
                     type=positive_int,
                     default=256,
                     metavar='size')
+parser.add_argument('--prepare-for-sm-text-section-wrapping',
+                    help='Make sure SM text sections can be wrapped after '
+                         'linking using sancus-crypto --wrap-sm-text-sections',
+                    action='store_true')
 parser.add_argument('--print-default-libs',
                     help='Print libraries that are always linked',
                     action='store_true')
@@ -335,6 +339,16 @@ mac_section = '''.data.sm.{0}.mac.{1} :
     . += {2} - 1;
   }}'''
 
+wrap_info_section = '''.data.sm.{0}.wrapinfo :
+  {{
+    . = ALIGN(2);
+    __sm_{0}_wrap_nonce = .;
+    SHORT(0x0000);
+    __sm_{0}_wrap_tag = .;
+    BYTE(0x00); /* without this, this section will be empty in the binary */
+    . += {1} - 1;
+  }}'''
+
 existing_text_section = '''.text.sm.{0} :
   {{
     *(.sm.{0}.text)
@@ -357,6 +371,7 @@ if args.standalone:
 text_sections = []
 data_sections = []
 mac_sections = []
+wrap_info_sections = []
 symbols = []
 for sm in sms:
     nentries = '__sm_{}_nentries'.format(sm)
@@ -465,6 +480,9 @@ for sm in sms:
     symbols.append('__sm_{}_num_connections = {};'.format(sm, len(ios)))
     symbols.append('__sm_{}_num_inputs = {};'.format(sm, len(inputs)))
 
+    if args.prepare_for_sm_text_section_wrapping:
+        wrap_info_sections.append(wrap_info_section.format(sm, MAC_SIZE))
+
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))
     data_sections.append(existing_data_section.format(sm))
@@ -475,6 +493,7 @@ for caller, callee in existing_macs:
 text_sections = '\n  '.join(text_sections)
 data_sections = '\n    '.join(data_sections)
 mac_sections = '\n  '.join(mac_sections)
+wrap_info_sections = '\n  '.join(wrap_info_sections)
 symbols = '\n'.join(symbols)
 
 tmp_ldscripts_path = get_tmp_dir()
@@ -507,6 +526,7 @@ else:
 contents = template.substitute(sm_text_sections=text_sections,
                                sm_data_sections=data_sections,
                                sm_mac_sections=mac_sections,
+                               sm_wrap_info_sections=wrap_info_sections,
                                sm_symbols=symbols,
                                mcu_ldscripts_path=mcu_ldscripts_path)
 

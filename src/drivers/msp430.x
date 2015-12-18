@@ -78,6 +78,7 @@ SECTIONS
   }  > REGION_TEXT
   $sm_text_sections
   $sm_mac_sections
+  $sm_wrap_info_sections
    _etext = .; /* Past last read-only (loadable) segment */
   .data   :
   {

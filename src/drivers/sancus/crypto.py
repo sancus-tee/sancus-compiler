@@ -11,6 +11,7 @@ import logging
 import argparse
 import sys
 import shutil
+import hashlib
 
 from elftools.elf.elffile import ELFFile
 
@@ -52,6 +53,11 @@ def _output_data(data):
     else:
         sys.stdout.buffer.write(data)
 
+
+def _get_sm_wrap_nonce(name):
+    hasher = hashlib.md5()
+    hasher.update(name)
+    return hasher.digest()[:2]
 
 def wrap(key, ad, body):
     # NOTE ctypes only understands bytes, not bytearrays
@@ -159,7 +165,45 @@ def fill_mac_sections(file, output_path, key):
                     logging.info(msg.format(callee))
 
 
+def wrap_sm_text_sections(file, output_path, key):
+    elf_file = ELFFile(file)
+    shutil.copy(file.name, output_path)
+
+    with open(output_path, 'rb+') as out_file:
+        for section in elf_file.iter_sections():
+            match = re.match(rb'.text.sm.(\w+)', section.name)
+
+            if not match:
+                continue
+
+            section_name, sm_name = match.group(0, 1)
+            logging.info('Wrapping text section of SM %s', sm_name)
+            section = elf_file.get_section_by_name(section_name)
+            nonce = _get_sm_wrap_nonce(sm_name)
+            wrapped_section_data, tag = wrap(key, nonce, section.data())
+
+            # Write wrapped section to output file
+            out_file.seek(section['sh_offset'])
+            out_file.write(wrapped_section_data)
+
+            # Write [nonce, tag] to the wrapinfo section.
+            # FIXME use % formatting when bumping Python version to 3.5
+            wrapinfo_name = '.data.sm.{}.wrapinfo' \
+                                .format(sm_name.decode('ascii')).encode('ascii')
+            wrapinfo_section = elf_file.get_section_by_name(wrapinfo_name)
+
+            if wrapinfo_section is None:
+                raise Error('No wrapinfo section found. Did you links with '
+                            '--prepare-for-sm-text-section-wrapping?')
+
+            wrapinfo_data = nonce + tag
+            print(wrapinfo_data)
+            out_file.seek(wrapinfo_section['sh_offset'])
+            out_file.write(wrapinfo_data)
+
+
 def main():
+    # FIXME this should really be cleaned up!
     parser = argparse.ArgumentParser()
     parser.add_argument('--verbose',
                         help='Show information messages',
@@ -196,6 +240,12 @@ def main():
                         help='Generate a tag of the given data',
                         type=_parse_hex,
                         metavar='data')
+    parser.add_argument('--fill-macs',
+                        help='Fill the MAC sections',
+                        action='store_true')
+    parser.add_argument('--wrap-sm-text-sections',
+                        help='Wrap the text sections with the given key',
+                        action='store_true')
     parser.add_argument('-o',
                         help='Output file',
                         dest='out_file',
@@ -238,10 +288,16 @@ def main():
                 _output_data(get_sm_key(file, args.gen_sm_key, args.key))
             else:
                 if not args.out_file:
-                    raise Error('Requested to fill MAC sections but no '
-                                'output file given')
-                else:
+                    raise Error('Requested to fill MAC sections or wrap text '
+                                'sections but no output file given')
+
+                if args.fill_macs:
                     fill_mac_sections(file, args.out_file, args.key)
+                elif args.wrap_sm_text_sections:
+                    wrap_sm_text_sections(file, args.out_file, args.key)
+                else:
+                    raise Error('If an output file is given, either --fill-macs'
+                                ' or --wrap-sm-text-sections should be given')
 
 
 if __name__ == '__main__':
