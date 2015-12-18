@@ -376,6 +376,22 @@ extern char __unprotected_sp;
 })
 
 /**
+ * Macro to get the nonce used for wrapping sm.
+ */
+#define SM_GET_WRAP_NONCE(sm) ({            \
+    extern unsigned __sm_##sm##_wrap_nonce;  \
+    __sm_##sm##_wrap_nonce;                  \
+})
+
+/**
+ * Macro to get the tag produced by wrapping sm.
+ */
+#define SM_GET_WRAP_TAG(sm) ({          \
+    extern void* __sm_##sm##_wrap_tag;   \
+    __sm_##sm##_wrap_tag;                \
+})
+
+/**
  * Interrupt vector for the Sancus violation ISR.
  *
  * Use as follows:
