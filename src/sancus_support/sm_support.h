@@ -387,8 +387,8 @@ extern char __unprotected_sp;
  * Macro to get the tag produced by wrapping sm.
  */
 #define SM_GET_WRAP_TAG(sm) ({          \
-    extern void* __sm_##sm##_wrap_tag;   \
-    __sm_##sm##_wrap_tag;                \
+    extern char __sm_##sm##_wrap_tag;   \
+    (void*)&__sm_##sm##_wrap_tag;                \
 })
 
 /**
