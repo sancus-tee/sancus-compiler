@@ -54,9 +54,10 @@ def _output_data(data):
         sys.stdout.buffer.write(data)
 
 
-def _get_sm_wrap_nonce(name):
+def _get_sm_wrap_nonce(name, body):
     hasher = hashlib.md5()
     hasher.update(name)
+    hasher.update(body)
     return hasher.digest()[:2]
 
 def wrap(key, ad, body):
@@ -179,7 +180,7 @@ def wrap_sm_text_sections(file, output_path, key):
             section_name, sm_name = match.group(0, 1)
             logging.info('Wrapping text section of SM %s', sm_name)
             section = elf_file.get_section_by_name(section_name)
-            nonce = _get_sm_wrap_nonce(sm_name)
+            nonce = _get_sm_wrap_nonce(sm_name, section.data())
             wrapped_section_data, tag = wrap(key, nonce, section.data())
 
             # Write wrapped section to output file
