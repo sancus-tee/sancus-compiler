@@ -367,6 +367,7 @@ if args.standalone:
     mac_section += ' > REGION_TEXT'
     existing_text_section += ' > REGION_TEXT'
     existing_mac_section += ' > REGION_TEXT'
+    wrap_info_section += ' > REGION_TEXT'
 
 text_sections = []
 data_sections = []
