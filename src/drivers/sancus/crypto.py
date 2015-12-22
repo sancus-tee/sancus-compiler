@@ -57,7 +57,7 @@ def _output_data(data):
 def _get_sm_wrap_nonce(name):
     hasher = hashlib.md5()
     hasher.update(name)
-    return hasher.digest()[:2]
+    return hasher.digest()[:2][::-1]
 
 def wrap(key, ad, body):
     # NOTE ctypes only understands bytes, not bytearrays
