@@ -135,9 +135,8 @@ def get_sm_mac(file, sm, key):
     return mac(key, _get_sm_identity(file, sm))
 
 
-def fill_mac_sections(file, output_path, key):
+def fill_mac_sections(file, output_path):
     elf_file = ELFFile(file)
-    keys = {}
     shutil.copy(file.name, output_path)
 
     with open(output_path, 'rb+') as out_file:
@@ -147,14 +146,10 @@ def fill_mac_sections(file, output_path, key):
             if match:
                 caller = match.group(1)
                 callee = match.group(2)
-                if not caller in keys:
-                    keys[caller] = get_sm_key(file, caller, key)
-                    hex_key = _get_hex_str(keys[caller])
-                    msg = 'Key used for SM {}: {}'
-                    logging.info(msg.format(caller, hex_key))
+                key = bytes(KEY_SIZE // 8)
 
                 try:
-                    mac = get_sm_mac(file, callee, keys[caller])
+                    mac = get_sm_mac(file, callee, key)
                     msg = 'MAC of {} used by {}: {}'
                     logging.info(msg.format(callee, caller, _get_hex_str(mac)))
                     out_file.seek(section['sh_offset'])
@@ -220,8 +215,7 @@ def main():
     parser.add_argument('--key',
                         help='{}-bit key in hexadecimal format'.format(KEY_SIZE),
                         type=_parse_key,
-                        metavar='key',
-                        required=True)
+                        metavar='key')
     parser.add_argument('--gen-vendor-key',
                         help='Generate the vendor key for the given ID',
                         type=_parse_id,
@@ -292,7 +286,7 @@ def main():
                                 'sections but no output file given')
 
                 if args.fill_macs:
-                    fill_mac_sections(file, args.out_file, args.key)
+                    fill_mac_sections(file, args.out_file)
                 elif args.wrap_sm_text_sections:
                     wrap_sm_text_sections(file, args.out_file, args.key)
                 else:
