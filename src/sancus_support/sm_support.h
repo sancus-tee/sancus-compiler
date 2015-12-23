@@ -100,7 +100,7 @@ always_inline void sancus_disable()
  * @see sancus_verify()
  */
 always_inline int sancus_verify_address(const void* expected_tag,
-                                          const void* address)
+                                        const void* address)
 {
     int ret;
     asm("mov %1, r14\n\t"
@@ -379,8 +379,8 @@ extern char __unprotected_sp;
  * Macro to get the nonce used for wrapping sm.
  */
 #define SM_GET_WRAP_NONCE(sm) ({            \
-    extern unsigned __sm_##sm##_wrap_nonce;  \
-    __sm_##sm##_wrap_nonce;                  \
+    extern unsigned __sm_##sm##_wrap_nonce; \
+    __sm_##sm##_wrap_nonce;                 \
 })
 
 /**
@@ -388,7 +388,7 @@ extern char __unprotected_sp;
  */
 #define SM_GET_WRAP_TAG(sm) ({          \
     extern char __sm_##sm##_wrap_tag;   \
-    (void*)&__sm_##sm##_wrap_tag;                \
+    (void*)&__sm_##sm##_wrap_tag;       \
 })
 
 /**
