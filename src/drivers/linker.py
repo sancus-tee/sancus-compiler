@@ -212,9 +212,25 @@ while i < len(input_files):
                     #find call from this SM to others
                     symtab = elf_file.get_section(section['sh_link'])
                     for rel in section.iter_relocations():
-                        sym_name = symtab.get_symbol(rel['r_info_sym']).name
-                        rel_match = re.match(rb'__sm_(\w+)_entry', sym_name)
-                        if rel_match and rel_match.group(1) != sm_name:
+                        sym = symtab.get_symbol(rel['r_info_sym'])
+                        rel_match = re.match(rb'__sm_(\w+)_entry$', sym.name)
+
+                        # If the called entry point's name would end in "entry",
+                        # the caller's text section would contain a stub whose
+                        # name matches the above RE. Therefore, we check that
+                        # the found symbol is not withing the caller's text
+                        # section.
+                        # I know, it's still hacky...
+                        sym_sect_idx = sym['st_shndx']
+
+                        if sym_sect_idx == 'SHN_UNDEF':
+                            sym_sect_idx = 0 # The special NULL section
+
+                        sym_sect = elf_file.get_section(sym_sect_idx)
+                        caller_sect = elf_file.get_section_by_name(
+                                b'.sm.' + sm_name.encode('ascii') + b'.text')
+
+                        if rel_match and sym_sect != caller_sect:
                             if not sm_name in sms_calls:
                                 sms_calls[sm_name] = set()
                             callee_name = rel_match.group(1).decode('ascii')
