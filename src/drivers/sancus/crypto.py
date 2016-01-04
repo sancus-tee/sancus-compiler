@@ -11,7 +11,6 @@ import logging
 import argparse
 import sys
 import shutil
-import hashlib
 
 from elftools.elf.elffile import ELFFile
 
@@ -55,10 +54,7 @@ def _output_data(data):
 
 
 def _get_sm_wrap_nonce(name, body):
-    hasher = hashlib.md5()
-    hasher.update(name)
-    hasher.update(body)
-    return hasher.digest()[:2][::-1]
+    return wrap(0, name, body)[1][:2][::-1]
 
 def wrap(key, ad, body):
     # NOTE ctypes only understands bytes, not bytearrays
