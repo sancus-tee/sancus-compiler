@@ -6,12 +6,13 @@
 #include <stdint.h>
 
 typedef uint16_t io_index;
+typedef uint8_t  io_data __attribute__((aligned(2)));
 
 // The ASM symbols are used for the linker to be able to detect inputs/outputs
 
 #define SM_OUTPUT_AUX(sm, name)                                         \
     asm("__sm_" #sm "_output_tag_" #name " = 0\n");                     \
-    SM_FUNC(sm) void name(const void* data, size_t len)                 \
+    SM_FUNC(sm) void name(const io_data* data, size_t len)              \
     {                                                                   \
         extern char __sm_##sm##_io_##name##_idx;                        \
         SM_FUNC(sm) void __sm_##sm##_send_output(unsigned int,          \
