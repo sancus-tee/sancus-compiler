@@ -215,6 +215,9 @@ while i < len(input_files):
                         sym = symtab.get_symbol(rel['r_info_sym'])
                         rel_match = re.match(rb'__sm_(\w+)_entry$', sym.name)
 
+                        if not rel_match:
+                            continue
+
                         # If the called entry point's name would end in "entry",
                         # the caller's text section would contain a stub whose
                         # name matches the above RE. Therefore, we check that
@@ -226,11 +229,12 @@ while i < len(input_files):
                         if sym_sect_idx == 'SHN_UNDEF':
                             sym_sect_idx = 0 # The special NULL section
 
+                        print(sym_sect_idx)
                         sym_sect = elf_file.get_section(sym_sect_idx)
                         caller_sect = elf_file.get_section_by_name(
                                 b'.sm.' + sm_name.encode('ascii') + b'.text')
 
-                        if rel_match and sym_sect != caller_sect:
+                        if sym_sect != caller_sect:
                             if not sm_name in sms_calls:
                                 sms_calls[sm_name] = set()
                             callee_name = rel_match.group(1).decode('ascii')
