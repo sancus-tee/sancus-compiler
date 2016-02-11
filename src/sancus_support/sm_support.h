@@ -356,6 +356,27 @@ extern char __unprotected_sp;
 #define SM_DATA(name)  SM_FUNC(name)
 
 /**
+ * Macro to create an ISR inside an SM. Inside the ISR, you can use the variable
+ * num_name to get the IRQ number that cause the execution of the ISR.
+ *
+ * Use as follows:
+ * @code
+ * SM_ISR(mod_name, num_name) {...}
+ * @endcode
+ */
+#define SM_ISR(name, num_name) void SM_FUNC(name) __attribute__((used)) \
+                               __sm_##name##_isr_func(unsigned num_name)
+
+/**
+ * Macro to indicate that you want to handle a certain IRQ (specified by
+ * irq_num) inside the SM with name sm_name. Note that using this macro without
+ * having an SM_ISR() function will just ignore the IRQ.
+ */
+#define SM_HANDLE_IRQ(sm_name, irq_num)                                 \
+    asm(".global __sm_" #sm_name "_handles_irq_" #irq_num "\n"          \
+                "__sm_" #sm_name "_handles_irq_" #irq_num " = 1\n")
+
+/**
  * Macro to get the index of entry point @p entry of SM @p sm.
  *
  * Both arguments should be names without quotes.

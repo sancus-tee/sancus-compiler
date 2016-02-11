@@ -2,6 +2,7 @@
 
 import re
 import string
+from collections import defaultdict
 
 from elftools.elf.elffile import ELFFile
 from elftools.common.exceptions import ELFError
@@ -156,6 +157,8 @@ sms_entries = {}
 sms_calls = {}
 sms_inputs = {}
 sms_outputs = {}
+sms_with_isr = set()
+sms_irq_handlers = defaultdict(list)
 existing_sms = set()
 existing_macs = []
 
@@ -229,7 +232,6 @@ while i < len(input_files):
                         if sym_sect_idx == 'SHN_UNDEF':
                             sym_sect_idx = 0 # The special NULL section
 
-                        print(sym_sect_idx)
                         sym_sect = elf_file.get_section(sym_sect_idx)
                         caller_sect = elf_file.get_section_by_name(
                                 b'.sm.' + sm_name.encode('ascii') + b'.text')
@@ -278,6 +280,20 @@ while i < len(input_files):
                         dest[sm] = []
 
                     dest[sm].append(name)
+                    continue
+
+                match = re.match(r'__sm_(\w+)_isr', name)
+
+                if match:
+                    sms_with_isr.add(match.group(1))
+                    continue
+
+                match = re.match(r'__sm_(\w+)_handles_irq_(\d+)', name)
+
+                if match:
+                    sm, irq = match.groups()
+                    sms_irq_handlers[sm].append(irq)
+                    continue
     except IOError as e:
         fatal_error(str(e))
     except ELFError as e:
@@ -312,6 +328,12 @@ if len(sms) > 0:
             info('  - Outputs:  {}'.format(', '.join(sms_outputs[sm])))
         else:
             info('  - No outputs')
+
+        if sm in sms_with_isr:
+            info('  - Can be used as ISR ({})'
+                            .format(', '.join(sms_irq_handlers[sm])))
+        else:
+            info('  - No ISR')
 else:
     info('No new Sancus modules found')
 
@@ -327,14 +349,16 @@ text_section = '''.text.sm.{0} :
   {{
     . = ALIGN(2);
     __sm_{0}_public_start = .;
+    {6}
     {1}
     {2}
+    {3}
     *(.sm.{0}.text)
     . = ALIGN(2);
     __sm_{0}_table = .;
-    {3}
-    . = ALIGN(2);
     {4}
+    . = ALIGN(2);
+    {5}
     __sm_{0}_public_end = .;
   }}'''
 
@@ -345,6 +369,10 @@ data_section = '''. = ALIGN(2);
     . += {2};
     __sm_{0}_stack_init = .;
     __sm_{0}_sp = .;
+    . += 2;
+    __sm_{0}_irq_sp = .;
+    . += 2;
+    __sm_{0}_tmp = .;
     . += 2;
     . = ALIGN(2);
     {3}
@@ -397,9 +425,13 @@ symbols = []
 for sm in sms:
     nentries = '__sm_{}_nentries'.format(sm)
     sym_map = {'__sm_entry'      : '__sm_{}_entry'.format(sm),
+               '__sm_isr'        : '__sm_{}_isr'.format(sm),
+               '__sm_isr_func'   : '__sm_{}_isr_func'.format(sm),
                '__sm_nentries'   : nentries,
                '__sm_table'      : '__sm_{}_table'.format(sm),
                '__sm_sp'         : '__sm_{}_sp'.format(sm),
+               '__sm_irq_sp'     : '__sm_{}_irq_sp'.format(sm),
+               '__sm_tmp'     : '__sm_{}_tmp'.format(sm),
                '__ret_entry'     : '__sm_{}_ret_entry'.format(sm),
                '__sm_exit'       : '__sm_{}_exit'.format(sm),
                '__sm_stack_init' : '__sm_{}_stack_init'.format(sm),
@@ -423,9 +455,14 @@ for sm in sms:
 
     entry_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_entry.o',
                                    sym_map, sect_map)
+    isr_file_name = 'sm_isr.o' if sm in sms_with_isr else 'sm_isr_dummy.o'
+    isr_file = rename_syms_sects(
+        sancus.paths.get_data_path() + '/' + isr_file_name, sym_map, sect_map)
     exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_exit.o',
                                   sym_map, sect_map)
-    input_files += [entry_file, exit_file]
+    input_files += [entry_file, isr_file, exit_file]
+
+    extra_labels = ['__isr_{} = .;'.format(n) for n in sms_irq_handlers[sm]]
 
     # Some convenience variables for the inputs/outputs
     inputs  = sms_inputs[sm]  if sm in sms_inputs  else []
@@ -480,18 +517,23 @@ for sm in sms:
         outputs_nonce += '    . += 2;\n'
         outputs_nonce += '    . = ALIGN(2);'
 
-    text_sections.append(text_section.format(sm, entry_file, exit_file,
-                                             '\n    '.join(tables),
-                                             input_callbacks))
+    text_sections.append(text_section.format(sm, entry_file, isr_file,
+                                             exit_file, '\n    '.join(tables),
+                                             input_callbacks,
+                                             '\n    '.join(extra_labels)))
     data_sections.append(data_section.format(sm, '\n    '.join(id_syms),
                                              args.sm_stack_size, io_keys,
                                              outputs_nonce))
 
     if sm in sms_entries:
-        symbols.append('{} = {};'.format(nentries, len(sms_entries[sm])))
+        num_entries = len(sms_entries[sm])
         for idx, entry in enumerate(sms_entries[sm]):
             sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry.name)
             symbols.append('{} = {};'.format(sym_name, idx))
+    else:
+        num_entries = 0
+
+    symbols.append('{} = {};'.format(nentries, num_entries))
 
     # Add a symbol for the index of every input/output
     for index, io in enumerate(ios):
