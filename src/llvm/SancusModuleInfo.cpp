@@ -10,9 +10,9 @@ std::string SancusModuleInfo::getTextSection() const
     return name.empty() ? ".text" : ".sm." + name + ".text";
 }
 
-std::string SancusModuleInfo::getTableSection() const
+std::string SancusModuleInfo::getTableSection(const std::string& entry) const
 {
-    return ".sm." + name + ".table";
+    return ".sm." + name + "." + entry + ".table";
 }
 
 std::string SancusModuleInfo::getStackName() const

@@ -79,12 +79,18 @@ def get_io_sym_map(sm_name):
 
 
 def get_io_sect_map(sm_name):
-    return {
+    map = {
         '.sm.X.text':       '.sm.{}.text'.format(sm_name),
         '.rela.sm.X.text':  '.rela.sm.{}.text'.format(sm_name),
-        '.sm.X.table':      '.sm.{}.table'.format(sm_name),
-        '.rela.sm.X.table': '.rela.sm.{}.table'.format(sm_name),
     }
+
+    for entry in ('__sm{}_set_key', '__sm{}_handle_input'):
+        map['.sm.X.{}.table'.format(entry.format(''))] = \
+            '.sm.{}.{}.table'.format(sm_name, entry.format('_' + sm_name))
+        map['.rela.sm.X.{}.table'.format(entry.format(''))] = \
+            '.rela.sm.{}.{}.table'.format(sm_name, entry.format('_' + sm_name))
+
+    return map
 
 
 def get_stub_path(stub_name):
@@ -153,7 +159,7 @@ if args.print_default_libs:
 
 # find all defined SMs
 sms = set()
-sms_entries = {}
+sms_entries = defaultdict(list)
 sms_calls = {}
 sms_inputs = {}
 sms_outputs = {}
@@ -190,22 +196,10 @@ while i < len(input_files):
                         existing_sms.add(sm_name)
                     continue
 
-                match = re.match(r'.rela.sm.(\w+).table', name)
+                match = re.match(r'.sm.(\w+).(\w+).table', name)
                 if match:
-                    sm_name = match.group(1)
-
-                    if not sm_name in sms_entries:
-                        sms_entries[sm_name] = []
-
-                    #find entry points of the SM in this file
-                    symtab = elf_file.get_section(section['sh_link'])
-                    entries = [(rel['r_offset'],
-                                symtab.get_symbol(rel['r_info_sym']).name)
-                                    for rel in section.iter_relocations()]
-                    entries.sort()
-                    sms_entries[sm_name] += \
-                        [SmEntry(entry.decode('ascii'), file_name)
-                            for _, entry in entries]
+                    sm_name, entry_name = match.groups()
+                    sms_entries[sm_name].append(SmEntry(entry_name, file_name))
                     continue
 
                 match = re.match(r'.rela.sm.(\w+).text', name)
@@ -440,7 +434,7 @@ for sm in sms:
 
     tables = []
     if sm in sms_entries:
-        tables = ['{}(.sm.{}.table)'.format(entry.file_name, sm)
+        tables = ['{}(.sm.{}.{}.table)'.format(entry.file_name, sm, entry.name)
                       for entry in sms_entries[sm]]
 
     id_syms = []

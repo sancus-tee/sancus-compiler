@@ -246,7 +246,7 @@ void SancusModuleCreator::createFunctionTable(Module& m)
         Constant* funcFields[] = {ConstantExpr::getBitCast(f, voidPtrTy),
                                   ConstantInt::get(wordTy, ccInfo.argsLength),
                                   ConstantInt::get(wordTy, ccInfo.retRegsUsage)};
-        funcsEls[info.getTableSection()]
+        funcsEls[info.getTableSection(f->getName())]
             .push_back(ConstantStruct::get(funcInfoTy, funcFields));
     }
 

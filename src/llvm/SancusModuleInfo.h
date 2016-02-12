@@ -11,7 +11,7 @@ struct SancusModuleInfo
 
     std::string getDataSection() const;
     std::string getTextSection() const;
-    std::string getTableSection() const;
+    std::string getTableSection(const std::string& entry) const;
     std::string getStackName() const;
     std::string getSpName() const;
     std::string getEntryName() const;
