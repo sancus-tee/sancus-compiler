@@ -377,6 +377,14 @@ extern char __unprotected_sp;
                 "__sm_" #sm_name "_handles_irq_" #irq_num " = 1\n")
 
 /**
+ * Macro to get the address of the entry point of SM @p sm.
+ */
+#define SM_GET_ENTRY(sm) ({         \
+    extern char __sm_##sm##_entry;  \
+    (void*)&__sm_##sm##_entry;      \
+})
+
+/**
  * Macro to get the index of entry point @p entry of SM @p sm.
  *
  * Both arguments should be names without quotes.
@@ -394,6 +402,17 @@ extern char __unprotected_sp;
 #define SM_GET_TAG(caller, callee) ({           \
     extern char __sm_##caller##_mac_##callee;   \
     (void*)&__sm_##caller##_mac_##callee;       \
+})
+
+/**
+ * Macro to get a pointer to the ID of @p callee that is used by @p caller after
+ * the initial verification.
+ *
+ * Both arguments should be names without quotes.
+ */
+#define SM_GET_VERIFY_ID(caller, callee) ({     \
+    extern char __sm_##caller##_id_##callee;    \
+    (sm_id*)&__sm_##caller##_id_##callee;       \
 })
 
 /**
