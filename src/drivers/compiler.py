@@ -33,6 +33,7 @@ parser.add_argument('-O',
 parser.add_argument('--opt-plugin',
                     help='Specify the opt plugin file to use',
                     default='SancusModuleCreator.so')
+parser.add_argument('-gstabs+', action='store_true')
 
 args, cc_args = parser.parse_known_args()
 set_args(args)
