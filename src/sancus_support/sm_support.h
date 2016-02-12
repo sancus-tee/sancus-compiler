@@ -99,10 +99,10 @@ always_inline void sancus_disable()
  *
  * @see sancus_verify()
  */
-always_inline int sancus_verify_address(const void* expected_tag,
-                                        const void* address)
+always_inline sm_id sancus_verify_address(const void* expected_tag,
+                                          const void* address)
 {
-    int ret;
+    sm_id ret;
     asm("mov %1, r14\n\t"
         "mov %2, r15\n\t"
         ".word 0x1382\n\t"
@@ -123,10 +123,10 @@ always_inline int sancus_verify_address(const void* expected_tag,
  * Note that this function normally should not be called directly; the compiler
  * will insert verification code on inter-module calls.
  *
- * @return True iff the verification succeeded.
+ * @return The ID of the verified SM on success, 0 otherwise.
  */
-always_inline int sancus_verify(const void* expected_tag,
-                                struct SancusModule* sm)
+always_inline sm_id sancus_verify(const void* expected_tag,
+                                  struct SancusModule* sm)
 {
     return sancus_verify_address(expected_tag, sm->public_start);
 }
