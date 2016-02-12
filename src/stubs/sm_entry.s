@@ -34,7 +34,10 @@ __sm_entry:
     ; a reset inside an SM (since the reset will disable all SMs), we simply
     ; ignore it here so that normal entry points can still be used.
     cmp #0xffff, r15
-    jne __sm_isr
+    ; If we just do je __sm_isr we get a PCREL relocation which our runtime
+    ; linker doesn't understand yet.
+    jeq 1f
+    br #__sm_isr
 1:
     pop r15
 
