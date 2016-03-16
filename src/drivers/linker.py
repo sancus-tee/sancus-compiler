@@ -359,6 +359,7 @@ text_section = '''.text.sm.{0} :
 data_section = '''. = ALIGN(2);
     __sm_{0}_secret_start = .;
     *(.sm.{0}.data)
+    . = ALIGN(2);
     {1}
     . += {2};
     __sm_{0}_stack_init = .;
