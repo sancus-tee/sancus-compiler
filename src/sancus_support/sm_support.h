@@ -454,7 +454,7 @@ extern char __unprotected_sp;
 /**
  * The number of bits security offered by the crypto functions
  */
-#define SANCUS_SECURITY 64
+#define SANCUS_SECURITY ${SECURITY}
 
 /**
  * The size of the tags used and produces by the crypto functions.
