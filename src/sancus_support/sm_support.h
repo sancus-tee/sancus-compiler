@@ -264,6 +264,16 @@ always_inline int sancus_tag(const void* body, size_t body_len, void* tag)
 }
 
 /**
+ * The same as sancus_wrap_with_key() but only produces the MAC of the message.
+ */
+always_inline int sancus_tag_with_key(const void* key,
+                                      const void* body, size_t body_len,
+                                      void* tag)
+{
+    return sancus_wrap_with_key(key, body, body_len, NULL, 0, NULL, tag);
+}
+
+/**
  * Get the Sancus ID of the module loaded at @p addr.
  */
 always_inline sm_id sancus_get_id(void* addr)
