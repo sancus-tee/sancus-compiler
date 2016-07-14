@@ -1,6 +1,8 @@
 #ifndef SM_SUPPORT_H
 #define SM_SUPPORT_H
 
+#include "config.h"
+
 #include <stddef.h>
 
 /**
@@ -464,7 +466,7 @@ extern char __unprotected_sp;
 /**
  * The number of bits security offered by the crypto functions
  */
-#define SANCUS_SECURITY ${SECURITY}
+#define SANCUS_SECURITY CONFIG_SECURITY
 
 /**
  * The size of the tags used and produces by the crypto functions.
