@@ -214,15 +214,15 @@ HashReturn Init(hashState *state, BitSequence *hashval = nullptr)
 // 		default:
 // 			return BAD_HASHBITLEN;
 // 	}
-	
-	memset(state->value, 0, nSBox);	
-	state->hashbitlen = 0;
-	state->remainingbitlen = 0;
+
+    memset(state->value, 0, nSBox);
+    state->hashbitlen = 0;
+    state->remainingbitlen = 0;
 
     if (hashval != nullptr)
         memset(hashval, 0, hashsize/8);
-	
-	return SUCCESS;
+
+    return SUCCESS;
 }
 
 //--------------------------------------------------------------------------------------------
