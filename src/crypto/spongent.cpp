@@ -12,6 +12,7 @@
 #include <math.h>
 #include <time.h>
 #include <algorithm>
+#include <iterator>
 #include "spongent.h"
 
 /* Spongent S-box */
