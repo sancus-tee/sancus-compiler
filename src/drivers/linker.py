@@ -183,14 +183,14 @@ while i < len(input_files):
         with open(file_name, 'rb') as file:
             elf_file = ELFFile(file)
             for section in elf_file.iter_sections():
-                name = section.name.decode('ascii')
+                name = section.name
                 match = re.match(r'.sm.(\w+).text', name)
                 if match:
                     sm_name = match.group(1)
                     # if the following symbol exists, we assume the SM is
                     # created manually and we will output it "as is"
                     label = '__sm_{}_public_start'.format(sm_name)
-                    if get_symbol(elf_file, label.encode('ascii')) is None:
+                    if get_symbol(elf_file, label) is None:
                         sms.add(sm_name)
                     else:
                         existing_sms.add(sm_name)
@@ -210,7 +210,7 @@ while i < len(input_files):
                     symtab = elf_file.get_section(section['sh_link'])
                     for rel in section.iter_relocations():
                         sym = symtab.get_symbol(rel['r_info_sym'])
-                        rel_match = re.match(rb'__sm_(\w+)_entry$', sym.name)
+                        rel_match = re.match(r'__sm_(\w+)_entry$', sym.name)
 
                         if not rel_match:
                             continue
@@ -228,12 +228,12 @@ while i < len(input_files):
 
                         sym_sect = elf_file.get_section(sym_sect_idx)
                         caller_sect = elf_file.get_section_by_name(
-                                b'.sm.' + sm_name.encode('ascii') + b'.text')
+                                                '.sm.{}.text'.format(sm_name))
 
                         if sym_sect != caller_sect:
                             if not sm_name in sms_calls:
                                 sms_calls[sm_name] = set()
-                            callee_name = rel_match.group(1).decode('ascii')
+                            callee_name = rel_match.group(1)
                             sms_calls[sm_name].add(callee_name)
                     continue
 
@@ -246,7 +246,7 @@ while i < len(input_files):
             # We also add the necessary stubs to the input files so that they
             # will be scanned for extra entry points later.
             for symbol in iter_symbols(elf_file):
-                name = symbol.name.decode('ascii')
+                name = symbol.name
                 match = re.match(r'__sm_(\w+)_(input|output)_tag_(\w+)', name)
 
                 if match:
