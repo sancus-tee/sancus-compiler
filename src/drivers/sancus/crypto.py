@@ -81,7 +81,7 @@ def mac(key, msg):
 
 
 def _get_sm_section(elf_file, sm):
-    sm_section = elf_file.get_section_by_name(bytes('.text.sm.' + sm, 'ascii'))
+    sm_section = elf_file.get_section_by_name('.text.sm.{}'.format(sm))
     if sm_section is None:
         raise ValueError('No such SM: ' + sm)
     return sm_section
@@ -89,7 +89,7 @@ def _get_sm_section(elf_file, sm):
 
 def _get_symbols(elf_file):
     from elftools.elf.sections import SymbolTableSection
-    return {symbol.name.decode('ascii'): symbol['st_value']
+    return {symbol.name: symbol['st_value']
                 for section in elf_file.iter_sections()
                     if isinstance(section, SymbolTableSection)
                         for symbol in section.iter_symbols()}
@@ -137,7 +137,7 @@ def fill_mac_sections(file, output_path):
 
     with open(output_path, 'rb+') as out_file:
         for section in elf_file.iter_sections():
-            name = section.name.decode('ascii')
+            name = section.name
             match = re.match(r'.data.sm.(\w+).mac.(\w+)', name)
             if match:
                 caller = match.group(1)
@@ -180,8 +180,7 @@ def wrap_sm_text_sections(file, output_path, key):
 
             # Write [nonce, tag] to the wrapinfo section.
             # FIXME use % formatting when bumping Python version to 3.5
-            wrapinfo_name = '.data.sm.{}.wrapinfo' \
-                                .format(sm_name.decode('ascii')).encode('ascii')
+            wrapinfo_name = '.data.sm.{}.wrapinfo'.format(sm_name)
             wrapinfo_section = elf_file.get_section_by_name(wrapinfo_name)
 
             if wrapinfo_section is None:
