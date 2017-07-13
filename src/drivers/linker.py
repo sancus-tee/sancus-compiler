@@ -22,6 +22,22 @@ class SmEntry:
         self.file_name = file_name
 
 
+class SmRel:
+    def __init__(self, sm, offset, sym):
+        self.sm = sm
+        self.rela_offset = offset
+        self.sym = sym.strip('_')
+
+    def get_sym(self):
+        return '__sm_{0}_{1}'.format(self.sm, self.sym)
+
+    def get_sect(self):
+        return '.sm.{0}.text'.format(self.sm)
+
+    def get_rela_sect(self):
+        return '.rela.sm.{0}.text'.format(self.sm)
+
+
 def rename_syms_sects(file, sym_map, sect_map):
     args = []
     for old, new in sym_map.items():
@@ -33,6 +49,18 @@ def rename_syms_sects(file, sym_map, sect_map):
     args += [file, out_file]
     call_prog('msp430-objcopy', args)
     return out_file
+
+
+# The `--add-symbol` option is only available for GNU binutils > msp430-gcc.
+# This function therefore relies on msp430-elf-objcopy from the TI GCC port.
+def add_sym(file, sym_map):
+    args = []
+    for sym, sect in sym_map.items():
+        args += ['--add-symbol', '{0}={1}:0,weak'.format(sym, sect)]
+
+    args += [file, file]
+    call_prog('msp430-elf-objcopy', args)
+    return file 
 
 
 def parse_size(val):
@@ -143,6 +171,10 @@ parser.add_argument('--prepare-for-sm-text-section-wrapping',
 parser.add_argument('--print-default-libs',
                     help='Print libraries that are always linked',
                     action='store_true')
+parser.add_argument('--inline-arithmetic',
+                    help='Intercept and securely inline integer arithmetic '
+                    'routines inserted by the compiler back-end',
+                    action='store_true')
 
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
@@ -168,6 +200,7 @@ sms_with_isr = set()
 sms_irq_handlers = defaultdict(list)
 existing_sms = set()
 existing_macs = []
+elf_relocations = defaultdict(list)
 
 added_set_key_stub = False
 added_input_stub = False
@@ -181,8 +214,8 @@ while i < len(input_files):
     i += 1
 
     try:
-        with open(file_name, 'rb') as file:
-            elf_file = ELFFile(file)
+        with open(file_name, 'rb') as f:
+            elf_file = ELFFile(f)
             for section in elf_file.iter_sections():
                 name = section.name
                 match = re.match(r'.sm.(\w+).text', name)
@@ -210,7 +243,8 @@ while i < len(input_files):
                     # Find call from this SM to others
                     sym = 'null'
                     symtab = elf_file.get_section(section['sh_link'])
-                    for rel in section.iter_relocations():
+                    for n in range(section.num_relocations()):
+                        rel = section.get_relocation(n)
                         prev_sym = sym
                         sym = symtab.get_symbol(rel['r_info_sym'])
 
@@ -223,6 +257,23 @@ while i < len(input_files):
                             if not sm_name in sms_unprotected_calls:
                                 sms_unprotected_calls[sm_name] = set()
                             sms_unprotected_calls[sm_name].add(prev_sym.name)
+
+                        # Intercept unprotected arithmetic function calls
+                        # inserted by the compiler back-end; see also:
+                        # llvm/lib/Target/MSP430/MSP430ISelLowering.cpp
+                        # llvm/lib/codegen/TargetLoweringBase.cpp
+                        # https://gcc.gnu.org/onlinedocs/gccint/Integer-library-routines.html
+                        ari_match = re.match(r'__(u|)(ashl|ashr|lshr|mul|div|mod)(q|h|s|d|t)i.*', sym.name)
+                        if ari_match and args.inline_arithmetic:
+                            rela_offset = n * section['sh_entsize']
+                            elf_relocations[file_name].append(
+                                SmRel(sm_name, rela_offset, sym.name))
+                        elif ari_match:
+                            fatal_error("Arithmetic function call '{0}' "
+                            "detected in SM '{1}'. Use the "
+                            "`--inline-arithmetic` option to securely inline "
+                            "integer arithmetic routines inserted by the "
+                            "compiler back-end.".format( sym.name, sm_name))
 
                         rel_match = re.match(r'__sm_(\w+)_entry$', sym.name)
                         if not rel_match:
@@ -350,6 +401,65 @@ if len(existing_sms) > 0:
         info(' * {}'.format(sm))
 else:
     info('No existing Sancus modules found')
+
+
+if args.inline_arithmetic:
+    # create sm_mul asm stub for each unique SM multiplication symbol
+    sms_relocations = defaultdict(set)
+    for rels in elf_relocations.values():
+        for sm_rel in rels:
+            sms_relocations[sm_rel.sm].add(sm_rel.sym)
+
+    # resolve dependencies (hack)
+    for sm, syms in sms_relocations.items():
+        if 'divhi3' in syms:
+            sms_relocations[sm].add('udivhi3')
+        elif 'modhi3' in syms:
+            sms_relocations[sm].add('divhi3')
+            sms_relocations[sm].add('udivhi3')
+        elif 'umodhi3' in syms:
+            sms_relocations[sm].add('udivhi3')
+
+    # add asm stubs for final linking step
+    for sm, syms in sms_relocations.items():
+        for sym in syms:
+            sym_map = {'__sm_mulhi3'  : '__sm_{}_mulhi3'.format(sm),
+                       '__sm_divhi3'  : '__sm_{}_divhi3'.format(sm),
+                       '__sm_udivhi3' : '__sm_{}_udivhi3'.format(sm),
+                       '__sm_modhi3'  : '__sm_{}_modhi3'.format(sm),
+                       '__sm_umodhi3' : '__sm_{}_umodhi3'.format(sm)
+                      }
+            sect_map = {'.sm.text' : '.sm.{}.text'.format(sm)}
+            obj = sancus.paths.get_data_path() + '/sm_{}.o'.format(sym)
+            input_files.append(rename_syms_sects(obj, sym_map, sect_map))
+
+    for fn in elf_relocations:
+        # add patched symbol names to infile
+        sym_map = { sm_rel.get_sym() : sm_rel.get_sect() for
+                        sm_rel in elf_relocations[fn] }
+        add_sym(fn, sym_map)
+
+        with open(fn, 'r+b') as f:
+            elf_file = ELFFile(f)
+            symtab = elf_file.get_section_by_name('.symtab')
+
+            for sm_rel in elf_relocations[fn]:
+                # calculate relocation offset (file has changed after add_sym)
+                relasect = elf_file.get_section_by_name(sm_rel.get_rela_sect())
+                offset = relasect['sh_offset'] + sm_rel.rela_offset
+
+                # get symbol table index of added symbol
+                for sym_idx in range(symtab.num_symbols()):
+                    if symtab.get_symbol(sym_idx).name == sm_rel.get_sym():
+                        break
+
+                # overwrite symbol table index in targeted relocation
+                # skip r_offset and patch r_info lower byte (litte endian)
+                info("Patching relocation for symbol '{0}' in SM '{1}' ({2})".
+                    format(sm_rel.get_sym(), sm_rel.sm, fn))
+                f.seek(offset+5)
+                f.write(bytes([sym_idx]))
+
 
 # create output sections for the the SM to be inserted in the linker script
 text_section = '''.text.sm.{0} :

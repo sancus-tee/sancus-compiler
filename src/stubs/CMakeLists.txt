@@ -8,6 +8,12 @@ add_object(sm_isr_dummy.o sm_isr_dummy.s)
 add_object(sm_exit.o sm_exit.s)
 add_object(sm_verify.o sm_verify.s)
 
+add_object(sm_mulhi3.o sm_mulhi3.s)
+add_object(sm_udivhi3.o sm_udivhi3.s)
+add_object(sm_divhi3.o sm_divhi3.s)
+add_object(sm_modhi3.o sm_modhi3.s)
+add_object(sm_umodhi3.o sm_umodhi3.s)
+
 include(UseSancusCC)
 set(EXTRA_FLAGS -I${CMAKE_SOURCE_DIR}/src/sancus_support)
 add_object(sm_output.o sm_output.c ${EXTRA_FLAGS})
@@ -23,6 +29,12 @@ set(STUBS
     ${CMAKE_CURRENT_BINARY_DIR}/sm_output.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_input.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_set_key.o
+
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_mulhi3.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_divhi3.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_udivhi3.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_modhi3.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_umodhi3.o
 )
 
 install(FILES ${STUBS}
