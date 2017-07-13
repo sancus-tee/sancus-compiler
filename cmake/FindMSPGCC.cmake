@@ -15,3 +15,11 @@ if (NOT EXISTS ${MSPGCC_BASE_DIR} OR
 endif ()
 
 find_package_handle_standard_args(MSPGCC DEFAULT_MSG MSPGCC_EXECUTABLE MSPGCC_BASE_DIR)
+
+find_program(MSP430_ELF_OBJCOPY msp430-elf-objcopy)
+
+if (NOT MSP430_ELF_OBJCOPY)
+    message(FATAL_ERROR "msp430-elf-objcopy executable not found (needed for "
+        "secure intra-SM arithmetics). Install TI MSP430-ELF-GCC suite from "
+        "http://www.ti.com/tool/msp430-gcc-opensource")
+endif ()
