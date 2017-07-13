@@ -213,7 +213,10 @@ bool SancusModuleCreator::handleData(GlobalVariable& gv)
     if (gv.hasCommonLinkage())
         gv.setLinkage(GlobalValue::WeakAnyLinkage);
 
-    gv.setSection(info.getDataSection());
+    // place 'const' data in the SM's text section
+    auto sect = gv.isConstant()? info.getTextSection() : info.getDataSection();
+    gv.setSection(sect);
+
     return true;
 }
 
