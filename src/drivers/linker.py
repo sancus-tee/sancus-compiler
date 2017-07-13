@@ -161,6 +161,7 @@ if args.print_default_libs:
 sms = set()
 sms_entries = defaultdict(list)
 sms_calls = {}
+sms_unprotected_calls = {}
 sms_inputs = {}
 sms_outputs = {}
 sms_with_isr = set()
@@ -206,12 +207,24 @@ while i < len(input_files):
                 if match:
                     sm_name = match.group(1)
 
-                    #find call from this SM to others
+                    # Find call from this SM to others
+                    sym = 'null'
                     symtab = elf_file.get_section(section['sh_link'])
                     for rel in section.iter_relocations():
+                        prev_sym = sym
                         sym = symtab.get_symbol(rel['r_info_sym'])
-                        rel_match = re.match(r'__sm_(\w+)_entry$', sym.name)
 
+                        # Keep track of unprotected outcalls from this SM
+                        # HACK: we know that the compiler-generated stubs first
+                        # reference the unprotected function name, just before
+                        # the '__unprotected_entry' symbol..
+                        rel_match = re.match(r'__unprotected_entry', sym.name)
+                        if rel_match:
+                            if not sm_name in sms_unprotected_calls:
+                                sms_unprotected_calls[sm_name] = set()
+                            sms_unprotected_calls[sm_name].add(prev_sym.name)
+
+                        rel_match = re.match(r'__sm_(\w+)_entry$', sym.name)
                         if not rel_match:
                             continue
 
@@ -309,25 +322,25 @@ if len(sms) > 0:
             info('  - No entries')
 
         if sm in sms_calls:
-            info('  - Calls:   {}'.format(', '.join(sms_calls[sm])))
+            info('  - SM calls: {}'.format(', '.join(sms_calls[sm])))
         else:
             info('  - No calls to other modules')
 
+        if sm in sms_unprotected_calls:
+            info('  - Unprotected calls: {}'.format(', '.join(
+                                                sms_unprotected_calls[sm])))
+        else:
+            info('  - No unprotected outcalls')
+
         if sm in sms_inputs:
             info('  - Inputs:  {}'.format(', '.join(sms_inputs[sm])))
-        else:
-            info('  - No inputs')
 
         if sm in sms_outputs:
             info('  - Outputs:  {}'.format(', '.join(sms_outputs[sm])))
-        else:
-            info('  - No outputs')
 
         if sm in sms_with_isr:
             info('  - Can be used as ISR ({})'
                             .format(', '.join(sms_irq_handlers[sm])))
-        else:
-            info('  - No ISR')
 else:
     info('No new Sancus modules found')
 
