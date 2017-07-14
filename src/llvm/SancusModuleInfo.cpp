@@ -3,13 +3,13 @@
 
 std::string SancusModuleInfo::getDataSection() const
 {
-    assert(!isAsm && "cannot request data section of asm SM");
+    assert(!isMmio && "cannot request data section of asm SM");
     return ".sm." + name + ".data";
 }
 
 std::string SancusModuleInfo::getTextSection() const
 {
-    std::string me = isAsm ? "asm." + name : name;
+    std::string me = isMmio ? "mmio." + name : name;
     return name.empty() ? ".text" : ".sm." + me + ".text";
 }
 

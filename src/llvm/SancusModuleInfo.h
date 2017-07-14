@@ -8,7 +8,7 @@ struct SancusModuleInfo
     std::string name;
     bool isInSm = false;
     bool isEntry = false;
-    bool isAsm = false;
+    bool isMmio = false;
 
     std::string getDataSection() const;
     std::string getTextSection() const;

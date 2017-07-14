@@ -52,7 +52,7 @@ struct SancusModuleCreator : ModulePass
     InfoMap modulesInfo;
 
     typedef std::map<std::string, bool> SmAsmMap;
-    SmAsmMap sms_asm;
+    SmAsmMap sms_mmio;
 
     typedef std::vector<Function*> EntryList;
     EntryList entries;
@@ -208,8 +208,8 @@ bool SancusModuleCreator::handleFunction(Function& f)
         oldInst->eraseFromParent();
     }
 
-    // complete asm_entry function with unconditional branch to exit stub
-    if (info.isAsm)
+    // complete mmio_entry function with unconditional branch to exit stub
+    if (info.isMmio)
     {
         auto asmStr = Twine("\tbr #" + info.getExitName() + "\n").str();
         auto constraintsStr = "";
@@ -217,7 +217,7 @@ bool SancusModuleCreator::handleFunction(Function& f)
         auto inlineAsm = InlineAsm::get(asmFuncTy, asmStr, constraintsStr,
                                     /*hasSideEffects=*/true);
         
-        // NOTE: the last instruction of the last basic block of an asm (naked)
+        // NOTE: the last instruction of the last basic block of an mmio (naked)
         // function is always the "unreachable" instruction. We therefore insert
         // our asm stub _before_ the last instruction.
         Instruction *last = &(f.back().back());
@@ -300,12 +300,12 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
     SancusModuleInfo callerInfo = getSancusModuleInfo(&caller);
     SancusModuleInfo calleeInfo = getSancusModuleInfo(&callee);
 
-    // asm (naked) SMs do not have a secure call stack
-    if (callerInfo.isAsm)
+    // mmio (naked) SMs do not have a secure call stack
+    if (callerInfo.isMmio)
     {
-        report_fatal_error("In asm_entry function " + caller.getName() + "(SM "
+        report_fatal_error("In mmio_entry function " + caller.getName() + "(SM "
                            + callerInfo.name
-                           + "): Function calls not supported for asm SMs.");
+                           + "): Function calls not supported for MMIO SMs.");
     }
 
     auto pair = std::make_pair(callerInfo.name, &callee);
@@ -449,35 +449,35 @@ SancusModuleInfo SancusModuleCreator::getSancusModuleInfo(const GlobalValue* gv)
             auto pair = ref.value.split(':');
 
             #define SM_ENTRY_ANNOTATION         "sm_entry"
-            #define SM_ASM_ENTRY_ANNOTATION     "sm_asm_entry"
+            #define SM_MMIO_ENTRY_ANNOTATION    "sm_mmio_entry"
             #define SM_FUNC_ANNOTATION          "sm"
 
             #define IS_VALID_SM_ANNOTATION( a ) \
-                (a == SM_ENTRY_ANNOTATION || a == SM_ASM_ENTRY_ANNOTATION || \
+                (a == SM_ENTRY_ANNOTATION || a == SM_MMIO_ENTRY_ANNOTATION || \
                  a == SM_FUNC_ANNOTATION)
 
             // ignore invalid annotations
             if (!pair.second.empty() && IS_VALID_SM_ANNOTATION(pair.first))
             {
                 info.name    = fixSymbolName(pair.second);
-                info.isAsm   = (pair.first==SM_ASM_ENTRY_ANNOTATION);
+                info.isMmio  = (pair.first==SM_MMIO_ENTRY_ANNOTATION);
                 info.isInSm  = true;
-                info.isEntry = (pair.first==SM_ENTRY_ANNOTATION) || info.isAsm;
+                info.isEntry = (pair.first==SM_ENTRY_ANNOTATION) || info.isMmio;
 
                 // assert consistency with any previous asm annotations
-                if (!sms_asm.count(info.name)) sms_asm[info.name] = info.isAsm;
-                if (sms_asm[info.name] != info.isAsm)
+                if (!sms_mmio.count(info.name)) sms_mmio[info.name] = info.isMmio;
+                if (sms_mmio[info.name] != info.isMmio)
                 {
                     std::stringstream m;
                     m << ref.file.str() << ":" << ref.line << ": Annotation '"
                       << ref.value.str() << "' on function '"
                       << gv->getName().str() << "' is inconsistent with "
                       << "previous annotations (cannot use SM_{ENTRY,FUNC,DATA}"
-                      << " for secure asm SMs).";
+                      << " for secure MMIO SMs).";
                     
                     module->getContext().emitError(m.str());
                 }
-                sms_asm[info.name] &= info.isAsm;
+                sms_mmio[info.name] &= info.isMmio;
             }
         }
     }
