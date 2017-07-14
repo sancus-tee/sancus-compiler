@@ -7,6 +7,8 @@ add_object(sm_isr.o sm_isr.s)
 add_object(sm_isr_dummy.o sm_isr_dummy.s)
 add_object(sm_exit.o sm_exit.s)
 add_object(sm_verify.o sm_verify.s)
+add_object(sm_asm_entry.o sm_asm_entry.s)
+add_object(sm_asm_exit.o sm_asm_exit.s)
 
 add_object(sm_mulhi3.o sm_mulhi3.s)
 add_object(sm_udivhi3.o sm_udivhi3.s)
@@ -29,6 +31,8 @@ set(STUBS
     ${CMAKE_CURRENT_BINARY_DIR}/sm_output.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_input.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_set_key.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_asm_entry.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_asm_exit.o
 
     ${CMAKE_CURRENT_BINARY_DIR}/sm_mulhi3.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_divhi3.o

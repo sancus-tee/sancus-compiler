@@ -1,13 +1,16 @@
 #include "SancusModuleInfo.h"
+#include <assert.h>
 
 std::string SancusModuleInfo::getDataSection() const
 {
+    assert(!isAsm && "cannot request data section of asm SM");
     return ".sm." + name + ".data";
 }
 
 std::string SancusModuleInfo::getTextSection() const
 {
-    return name.empty() ? ".text" : ".sm." + name + ".text";
+    std::string me = isAsm ? "asm." + name : name;
+    return name.empty() ? ".text" : ".sm." + me + ".text";
 }
 
 std::string SancusModuleInfo::getTableSection(const std::string& entry) const

@@ -60,6 +60,19 @@ struct SancusModule
                                 &__PS(name), &__PE(name),       \
                                 &__SS(name), &__SE(name)}
 
+// Helper macro to ensure arguments are expanded
+#define DECLARE_ASM_SM_AUX(name, secret_start, secret_end, caller_id, vendor) \
+    asm("__sm_asm_" #name "_secret_start =" #secret_start "\n");              \
+    asm("__sm_asm_" #name "_secret_end =" #secret_end "\n");                  \
+    asm("__sm_asm_" #name "_caller_id =" #caller_id "\n");                    \
+    DECLARE_SM(name, vendor)
+
+/**
+ * NOTE: secret_start is inclusive; secret_end is exclusive
+ */
+#define DECLARE_ASM_SM(name, secret_start, secret_end, caller_id, vendor)     \
+    DECLARE_ASM_SM_AUX(name, secret_start, secret_end, caller_id, vendor)     \
+
 /**
  * Enables the protection of the given module.
  *
@@ -346,6 +359,9 @@ extern char __unprotected_sp;
  */
 #define SM_ENTRY(name) __ANNOTATE("sm_entry:" __STR(name)) \
                        __attribute__((noinline, used))
+
+#define SM_ASM_ENTRY(name) __ANNOTATE("sm_asm_entry:" __STR(name)) \
+                       __attribute__((noinline, used, naked))
 
 /**
  * Annotation for internal module function (i.e., not entry points).

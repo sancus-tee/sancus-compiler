@@ -19,6 +19,8 @@
 
 #include <sstream>
 
+#include <iostream>
+
 using namespace llvm;
 
 namespace
@@ -49,6 +51,9 @@ struct SancusModuleCreator : ModulePass
     typedef std::map<const GlobalValue*, SancusModuleInfo> InfoMap;
     InfoMap modulesInfo;
 
+    typedef std::map<std::string, bool> SmAsmMap;
+    SmAsmMap sms_asm;
+
     typedef std::vector<Function*> EntryList;
     EntryList entries;
     typedef std::map<std::pair<std::string, Function*>, Function*> StubMap;
@@ -58,6 +63,7 @@ struct SancusModuleCreator : ModulePass
     Type* wordTy;
     Type* byteTy;
     Type* voidPtrTy;
+    Type* voidTy;
     FunctionType* verifyTy;
 };
 
@@ -83,6 +89,7 @@ bool SancusModuleCreator::runOnModule(Module& m)
     wordTy = TypeBuilder<types::i<16>, true>::get(ctx);
     byteTy = TypeBuilder<types::i<8>, true>::get(ctx);
     voidPtrTy = TypeBuilder<types::i<8>*, true>::get(ctx);
+    voidTy = Type::getVoidTy(ctx);
 
     Type* argTys[] = {voidPtrTy, voidPtrTy, voidPtrTy};
     verifyTy = FunctionType::get(Type::getVoidTy(ctx), argTys,
@@ -201,6 +208,26 @@ bool SancusModuleCreator::handleFunction(Function& f)
         oldInst->eraseFromParent();
     }
 
+    // complete asm_entry function with unconditional branch to exit stub
+    if (info.isAsm)
+    {
+        auto asmStr = Twine("\tbr #" + info.getExitName() + "\n").str();
+        auto constraintsStr = "";
+        auto asmFuncTy = FunctionType::get(voidTy, /*isVarArg=*/false);
+        auto inlineAsm = InlineAsm::get(asmFuncTy, asmStr, constraintsStr,
+                                    /*hasSideEffects=*/true);
+        
+        // NOTE: the last instruction of the last basic block of an asm (naked)
+        // function is always the "unreachable" instruction. We therefore insert
+        // our asm stub _before_ the last instruction.
+        Instruction *last = &(f.back().back());
+        assert(UnreachableInst::classof(last) &&
+           "Inserting sm_asm_exit branch before non-unreachable instruction");
+        CallInst::Create(inlineAsm, /*nameStr=*/ "", /*insertBefore=*/ last); 
+
+        modified = true;
+    }
+
     return modified;
 }
 
@@ -272,6 +299,14 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
     Module* m = caller.getParent();
     SancusModuleInfo callerInfo = getSancusModuleInfo(&caller);
     SancusModuleInfo calleeInfo = getSancusModuleInfo(&callee);
+
+    // asm (naked) SMs do not have a secure call stack
+    if (callerInfo.isAsm)
+    {
+        report_fatal_error("In asm_entry function " + caller.getName() + "(SM "
+                           + callerInfo.name
+                           + "): Function calls not supported for asm SMs.");
+    }
 
     auto pair = std::make_pair(callerInfo.name, &callee);
     StubMap::iterator it = stubs.find(pair);
@@ -413,13 +448,36 @@ SancusModuleInfo SancusModuleCreator::getSancusModuleInfo(const GlobalValue* gv)
         {
             auto pair = ref.value.split(':');
 
+            #define SM_ENTRY_ANNOTATION         "sm_entry"
+            #define SM_ASM_ENTRY_ANNOTATION     "sm_asm_entry"
+            #define SM_FUNC_ANNOTATION          "sm"
+
+            #define IS_VALID_SM_ANNOTATION( a ) \
+                (a == SM_ENTRY_ANNOTATION || a == SM_ASM_ENTRY_ANNOTATION || \
+                 a == SM_FUNC_ANNOTATION)
+
             // ignore invalid annotations
-            if (!pair.second.empty() &&
-                (pair.first == "sm" || pair.first == "sm_entry"))
+            if (!pair.second.empty() && IS_VALID_SM_ANNOTATION(pair.first))
             {
-                info.isEntry = pair.first == "sm_entry";
-                info.name = fixSymbolName(pair.second);
-                info.isInSm = true;
+                info.name    = fixSymbolName(pair.second);
+                info.isAsm   = (pair.first==SM_ASM_ENTRY_ANNOTATION);
+                info.isInSm  = true;
+                info.isEntry = (pair.first==SM_ENTRY_ANNOTATION) || info.isAsm;
+
+                // assert consistency with any previous asm annotations
+                if (!sms_asm.count(info.name)) sms_asm[info.name] = info.isAsm;
+                if (sms_asm[info.name] != info.isAsm)
+                {
+                    std::stringstream m;
+                    m << ref.file.str() << ":" << ref.line << ": Annotation '"
+                      << ref.value.str() << "' on function '"
+                      << gv->getName().str() << "' is inconsistent with "
+                      << "previous annotations (cannot use SM_{ENTRY,FUNC,DATA}"
+                      << " for secure asm SMs).";
+                    
+                    module->getContext().emitError(m.str());
+                }
+                sms_asm[info.name] &= info.isAsm;
             }
         }
     }

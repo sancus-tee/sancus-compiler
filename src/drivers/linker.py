@@ -199,6 +199,7 @@ sms_outputs = {}
 sms_with_isr = set()
 sms_irq_handlers = defaultdict(list)
 existing_sms = set()
+asm_sms = defaultdict(dict)
 existing_macs = []
 elf_relocations = defaultdict(list)
 
@@ -306,13 +307,23 @@ while i < len(input_files):
                     existing_macs.append((match.group(1), match.group(2)))
                     continue
 
-            # Find the tag symbols used to identify inputs/outputs.
-            # We also add the necessary stubs to the input files so that they
-            # will be scanned for extra entry points later.
             for symbol in iter_symbols(elf_file):
                 name = symbol.name
-                match = re.match(r'__sm_(\w+)_(input|output)_tag_(\w+)', name)
 
+                # Find the symbols used to identify asm MMIO SMs.
+                # TODO we really need a decent configparser to encapsulate this
+                # magic and query parsed properties in a cleaner way
+                match = re.match(r'__sm_asm_(\w+)_(secret_start|secret_end|caller_id)', name)
+                if match:
+                    sm, which = match.groups()
+                    val = symbol['st_value']
+                    asm_sms[sm][which]=val
+                    continue
+
+                # Find the tag symbols used to identify inputs/outputs.
+                # We also add the necessary stubs to the input files so that they
+                # will be scanned for extra entry points later.
+                match = re.match(r'__sm_(\w+)_(input|output)_tag_(\w+)', name)
                 if match:
                     sm, which, name = match.groups()
 
@@ -402,6 +413,22 @@ if len(existing_sms) > 0:
 else:
     info('No existing Sancus modules found')
 
+if len(asm_sms) > 0:
+    info('Found asm MMIO Sancus modules:')
+    for sm in asm_sms:
+        info(' * {}'.format(sm))
+
+        if sm in sms_entries:
+            entry_names = [entry.name for entry in sms_entries[sm]]
+            info('  - Entries: {}'.format(', '.join(entry_names)))
+        else:
+            info('  - No entries')
+        info('  - Config: callerID={:d}, private data=[{:#x}, {:#x}['.format(
+                asm_sms[sm]['caller_id'], asm_sms[sm]['secret_start'],
+                asm_sms[sm]['secret_end']))
+else:
+    info('No asm Sancus modules found')
+
 
 if args.inline_arithmetic:
     # create sm_mul asm stub for each unique SM multiplication symbol
@@ -479,6 +506,20 @@ text_section = '''.text.sm.{0} :
     __sm_{0}_public_end = .;
   }}'''
 
+asm_text_section = '''.text.sm.{0} :
+  {{
+    . = ALIGN(2);
+    __sm_{0}_public_start = .;
+    {1}
+    {2}
+    *(.sm.asm.{0}.text)
+    . = ALIGN(2);
+    __sm_{0}_table = .;
+    {3}
+    . = ALIGN(2);
+    __sm_{0}_public_end = .;
+  }}'''
+
 data_section = '''. = ALIGN(2);
     __sm_{0}_secret_start = .;
     *(.sm.{0}.data)
@@ -530,6 +571,7 @@ existing_mac_section = '''.data.sm.{0}.mac.{1} :
 
 if args.standalone:
     text_section += ' > REGION_TEXT'
+    asm_text_section += '> REGION_TEXT'
     mac_section += ' > REGION_TEXT'
     existing_text_section += ' > REGION_TEXT'
     existing_mac_section += ' > REGION_TEXT'
@@ -663,6 +705,38 @@ for sm in sms:
 
     if args.prepare_for_sm_text_section_wrapping:
         wrap_info_sections.append(wrap_info_section.format(sm, MAC_SIZE))
+
+for sm in asm_sms:
+    sym_map = {'__sm_entry'         : '__sm_{}_entry'.format(sm),
+               '__sm_exit'          : '__sm_{}_exit'.format(sm),
+               '__sm_table'         : '__sm_{}_table'.format(sm),
+               '__sm_caller_id'     : '__sm_{}_caller_id'.format(sm)
+              }
+    sect_map = {'.sm.text' : '.sm.asm.{}.text'.format(sm)}
+
+    tables = []
+    if sm in sms_entries:
+        tables = ['{}(.sm.{}.{}.table)'.format(entry.file_name, sm, entry.name)
+                      for entry in sms_entries[sm]]
+
+    entry_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_asm_entry.o',
+                                   sym_map, sect_map)
+    exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_asm_exit.o',
+                                   sym_map, sect_map)
+    args.in_files += [entry_file, exit_file]
+    text_sections.append(asm_text_section.format(sm, entry_file, exit_file,
+                                             '\n    '.join(tables)))
+
+    # create symbol table with values known at link time
+    symbols.append('__sm_{}_secret_start = {};'.format(sm,
+                                                asm_sms[sm]['secret_start']))
+    symbols.append('__sm_{}_secret_end = {};'.format(sm,
+                                                asm_sms[sm]['secret_end']))
+    symbols.append('__sm_{}_caller_id = {};'.format(sm,
+                                                asm_sms[sm]['caller_id']))
+    for idx, entry in enumerate(sms_entries[sm]):
+        sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry.name)
+        symbols.append('{} = {};'.format(sym_name, idx))
 
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))
