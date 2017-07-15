@@ -108,9 +108,28 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 /**
  * Disable the protection of the calling module.
  */
-always_inline void sancus_disable()
+always_inline void sancus_disable(void *continuation)
 {
-    asm(".word 0x1380");
+    // The unprotect instruction takes care of clearing all SM code/data
+    // memory; we clear unused CPU registers here. Note that we do not mark
+    // them as clobbered, for execution continues at the continuation argument.
+    asm(
+        "mov %0, r15\n\t"
+        "clr r1\n\t"
+        "and #0x7ef8, r2\n\t"
+        "clr r4\n\t"
+        "clr r5\n\t"
+        "clr r6\n\t"
+        "clr r7\n\t"
+        "clr r8\n\t"
+        "clr r9\n\t"
+        "clr r10\n\t"
+        "clr r11\n\t"
+        "clr r12\n\t"
+        "clr r13\n\t"
+        "clr r14\n\t"
+        ".word 0x1380\n\t"
+        ::"m"(continuation):);
 }
 
 /**
