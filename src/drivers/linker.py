@@ -423,9 +423,9 @@ if len(mmio_sms) > 0:
             info('  - Entries: {}'.format(', '.join(entry_names)))
         else:
             info('  - No entries')
-        info('  - Config: callerID={:d}, private data=[{:#x}, {:#x}['.format(
-                mmio_sms[sm]['caller_id'], mmio_sms[sm]['secret_start'],
-                mmio_sms[sm]['secret_end']))
+        cid = mmio_sms[sm]['caller_id'] if 'caller_id' in mmio_sms[sm] else 'any'
+        info('  - Config: callerID={}, private data=[{:#x}, {:#x}['.format(
+                cid, mmio_sms[sm]['secret_start'], mmio_sms[sm]['secret_end']))
 else:
     info('No asm Sancus modules found')
 
@@ -511,11 +511,10 @@ mmio_text_section = '''.text.sm.{0} :
     . = ALIGN(2);
     __sm_{0}_public_start = .;
     {1}
-    {2}
     *(.sm.mmio.{0}.text)
     . = ALIGN(2);
     __sm_{0}_table = .;
-    {3}
+    {2}
     . = ALIGN(2);
     __sm_{0}_public_end = .;
   }}'''
@@ -706,11 +705,14 @@ for sm in sms:
     if args.prepare_for_sm_text_section_wrapping:
         wrap_info_sections.append(wrap_info_section.format(sm, MAC_SIZE))
 
+# TODO code duplication below should be refactored away
 for sm in mmio_sms:
-    sym_map = {'__sm_entry'         : '__sm_{}_entry'.format(sm),
-               '__sm_exit'          : '__sm_{}_exit'.format(sm),
-               '__sm_table'         : '__sm_{}_table'.format(sm),
-               '__sm_caller_id'     : '__sm_{}_caller_id'.format(sm)
+    nentries = '__sm_{}_nentries'.format(sm)
+    sym_map = {'__sm_entry'      : '__sm_{}_entry'.format(sm),
+               '__sm_exit'       : '__sm_{}_exit'.format(sm),
+               '__sm_nentries'   : nentries,
+               '__sm_table'      : '__sm_{}_table'.format(sm),
+               '__sm_caller_id'  : '__sm_{}_caller_id'.format(sm)
               }
     sect_map = {'.sm.text' : '.sm.mmio.{}.text'.format(sm)}
 
@@ -719,24 +721,30 @@ for sm in mmio_sms:
         tables = ['{}(.sm.{}.{}.table)'.format(entry.file_name, sm, entry.name)
                       for entry in sms_entries[sm]]
 
-    entry_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_mmio_entry.o',
+    verifyCaller = 'caller_id' in mmio_sms[sm]
+    entry_file = '/sm_mmio_exlusive.o' if verifyCaller else '/sm_mmio_entry.o'
+    entry_file = rename_syms_sects(sancus.paths.get_data_path() + entry_file,
                                    sym_map, sect_map)
-    exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_mmio_exit.o',
-                                   sym_map, sect_map)
-    args.in_files += [entry_file, exit_file]
-    text_sections.append(mmio_text_section.format(sm, entry_file, exit_file,
-                                             '\n    '.join(tables)))
+    args.in_files += entry_file
+    text_sections.append(mmio_text_section.format(sm, entry_file,
+                                                     '\n    '.join(tables)))
 
     # create symbol table with values known at link time
-    symbols.append('__sm_{}_secret_start = {};'.format(sm,
-                                                mmio_sms[sm]['secret_start']))
-    symbols.append('__sm_{}_secret_end = {};'.format(sm,
-                                                mmio_sms[sm]['secret_end']))
-    symbols.append('__sm_{}_caller_id = {};'.format(sm,
-                                                mmio_sms[sm]['caller_id']))
-    for idx, entry in enumerate(sms_entries[sm]):
-        sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry.name)
-        symbols.append('{} = {};'.format(sym_name, idx))
+    m = mmio_sms[sm]
+    symbols.append('__sm_{}_secret_start = {};'.format(sm, m['secret_start']))
+    symbols.append('__sm_{}_secret_end = {};'.format(sm, m['secret_end']))
+    if verifyCaller:
+        symbols.append('__sm_{}_caller_id = {};'.format(sm, m['caller_id']))
+
+    if sm in sms_entries:
+        num_entries = len(sms_entries[sm])
+        for idx, entry in enumerate(sms_entries[sm]):
+            sym_name = '__sm_{}_entry_{}_idx'.format(sm, entry.name)
+            symbols.append('{} = {};'.format(sym_name, idx))
+    else:
+        num_entries = 0
+
+    symbols.append('{} = {};'.format(nentries, num_entries))
 
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))

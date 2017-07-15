@@ -54,24 +54,28 @@ struct SancusModule
  *                  SM_FUNC() and SM_DATA() macros but without quotation marks.
  * @param vendor_id The ID of the module's vendor.
  */
-#define DECLARE_SM(name, vendor_id)                             \
-    extern char __PS(name), __PE(name), __SS(name), __SE(name); \
-    struct SancusModule name = {0, vendor_id, #name,            \
-                                &__PS(name), &__PE(name),       \
+#define DECLARE_SM(name, vendor_id)                                 \
+    extern char __PS(name), __PE(name), __SS(name), __SE(name);     \
+    struct SancusModule name = {0, vendor_id, #name,                \
+                                &__PS(name), &__PE(name),           \
                                 &__SS(name), &__SE(name)}
 
 // Helper macro to ensure arguments are expanded
-#define DECLARE_MMIO_SM_AUX(name, secret_start, secret_end, caller_id, vendor) \
-    asm("__sm_mmio_" #name "_secret_start =" #secret_start "\n");              \
-    asm("__sm_mmio_" #name "_secret_end =" #secret_end "\n");                  \
-    asm("__sm_mmio_" #name "_caller_id =" #caller_id "\n");                    \
+#define DECLARE_MMIO_SM_AUX(name, secret_start, secret_end, vendor) \
+    asm("__sm_mmio_" #name "_secret_start =" #secret_start "\n");   \
+    asm("__sm_mmio_" #name "_secret_end =" #secret_end "\n");       \
     DECLARE_SM(name, vendor)
 
 /**
  * NOTE: secret_start is inclusive; secret_end is exclusive
  */
-#define DECLARE_MMIO_SM(name, secret_start, secret_end, caller_id, vendor)     \
-    DECLARE_MMIO_SM_AUX(name, secret_start, secret_end, caller_id, vendor)     \
+#define DECLARE_EXCLUSIVE_MMIO_SM(name, secret_start, secret_end,   \
+                                  caller_id, vendor)                \
+    DECLARE_MMIO_SM_AUX(name, secret_start, secret_end, vendor);    \
+    asm("__sm_mmio_" #name "_caller_id =" #caller_id "\n")
+
+#define DECLARE_MMIO_SM(name, secret_start, secret_end, vendor)     \
+    DECLARE_MMIO_SM_AUX(name, secret_start, secret_end, vendor)
 
 /**
  * Enables the protection of the given module.
