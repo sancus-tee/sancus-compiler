@@ -722,7 +722,7 @@ for sm in mmio_sms:
                       for entry in sms_entries[sm]]
 
     verifyCaller = 'caller_id' in mmio_sms[sm]
-    entry_file = '/sm_mmio_exlusive.o' if verifyCaller else '/sm_mmio_entry.o'
+    entry_file = '/sm_mmio_exclusive.o' if verifyCaller else '/sm_mmio_entry.o'
     entry_file = rename_syms_sects(sancus.paths.get_data_path() + entry_file,
                                    sym_map, sect_map)
     args.in_files += entry_file
