@@ -47,7 +47,7 @@ def rename_syms_sects(file, sym_map, sect_map):
 
     out_file = get_tmp('.o')
     args += [file, out_file]
-    call_prog('msp430-objcopy', args)
+    call_prog('msp430-elf-objcopy', args)
     return out_file
 
 
@@ -60,7 +60,7 @@ def add_sym(file, sym_map):
 
     args += [file, file]
     call_prog('msp430-elf-objcopy', args)
-    return file 
+    return file
 
 
 def parse_size(val):
