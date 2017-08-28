@@ -54,7 +54,7 @@ def _output_data(data):
 
 
 def _get_sm_wrap_nonce(name, body):
-    return wrap(0, name, body)[1][:2][::-1]
+    return wrap(0, bytes(name, 'utf-8'), body)[1][:2][::-1]
 
 def wrap(key, ad, body):
     # NOTE ctypes only understands bytes, not bytearrays
@@ -163,7 +163,7 @@ def wrap_sm_text_sections(file, output_path, key):
 
     with open(output_path, 'rb+') as out_file:
         for section in elf_file.iter_sections():
-            match = re.match(rb'.text.sm.(\w+)', section.name)
+            match = re.match(r'.text.sm.(\w+)', section.name)
 
             if not match:
                 continue
@@ -293,7 +293,7 @@ if __name__ == '__main__':
     try:
         main()
     except IOError as e:
-        logging.error('Cannot open file: {}'.fornat(str(e)))
+        logging.error('Cannot open file: {}'.format(str(e)))
         sys.exit(1)
     except Exception as e:
         logging.error(str(e))
