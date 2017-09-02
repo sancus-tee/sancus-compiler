@@ -2,7 +2,8 @@ include(FindPackageHandleStandardArgs)
 
 find_program(MSPGCC_EXECUTABLE msp430-gcc)
 
-get_filename_component(TMP ${MSPGCC_EXECUTABLE} PATH)
+get_filename_component(TMP ${MSPGCC_EXECUTABLE} REALPATH)
+get_filename_component(TMP ${TMP} PATH)
 get_filename_component(MSPGCC_BASE_DIR ${TMP}/../msp430 ABSOLUTE)
 set(TMP)
 set(MSPGCC_LIB_DIR ${MSPGCC_BASE_DIR}/lib)
