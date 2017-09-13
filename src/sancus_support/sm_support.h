@@ -199,6 +199,20 @@ always_inline int sancus_verify_caller(const void* expected_tag)
  * depends of the amount of security bits the Sancus core has been synthesized
  * with).
  *
+ * @param key       Optional pointer to input key buffer of SANCUS_KEY_SIZE
+ *                  bytes; NULL to use the SM key of the executing module.
+ * @param ad        Required pointer to start of associated data input buffer;
+ *                  cannot be NULL.
+ * @param ad_len    Length of associated data input buffer.
+ * @param body      Optional pointer to input buffer holding the plain text;
+                    NULL when only MAC over associated data is required.
+ * @param body_len  Length of plain text data input buffer.
+ * @param cipher    Optional pointer to output buffer of @p body_len bytes for
+ *                  the cipher text; cannot be NULL when @p body is non-zero.
+ * @param tag       Required pointer to output buffer of SANCUS_TAG_SIZE bytes
+ *                  for MAC over both associated data and plain text (if any);
+ *                  cannot be NULL;
+ *
  * @return True iff the wrapping succeeded.
  */
 always_inline int sancus_wrap_with_key(const void* key,
