@@ -6,6 +6,7 @@ add_object(sm_entry.o sm_entry.s)
 add_object(sm_isr.o sm_isr.s)
 add_object(sm_isr_dummy.o sm_isr_dummy.s)
 add_object(sm_exit.o sm_exit.s)
+add_object(sm_ocall_spill.o sm_ocall_spill.s)
 add_object(sm_verify.o sm_verify.s)
 add_object(sm_mmio_entry.o sm_mmio_entry.s)
 add_object(sm_mmio_exclusive.o sm_mmio_entry.s
@@ -28,6 +29,7 @@ set(STUBS
     ${CMAKE_CURRENT_BINARY_DIR}/sm_isr.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_isr_dummy.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_exit.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_ocall_spill.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_verify.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_output.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_input.o

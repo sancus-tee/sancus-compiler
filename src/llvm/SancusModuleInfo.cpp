@@ -38,6 +38,11 @@ std::string SancusModuleInfo::getExitName() const
     return "__sm_" + name + "_exit";
 }
 
+std::string SancusModuleInfo::getSpillName() const
+{
+    return "__sm_" + name + "_ocall_spill";
+}
+
 std::string SancusModuleInfo::getVerifyName() const
 {
     return "__sm_" + name + "_verify";
@@ -62,4 +67,9 @@ std::string SancusModuleInfo::getCalleeStubName(const std::string& callee) const
 {
     std::string me = name.empty() ? "__unprotected" : "__sm_" + name;
     return me + "_stub_" + callee;
+}
+
+std::string SancusModuleInfo::getSpillStubName(const std::string& callee, const int size) const
+{
+    return "__sm_" + name + "_" + callee + std::to_string(size) + "_spill";
 }

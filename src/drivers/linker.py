@@ -584,6 +584,9 @@ symbols = []
 for sm in sms:
     nentries = '__sm_{}_nentries'.format(sm)
     sym_map = {'__sm_entry'      : '__sm_{}_entry'.format(sm),
+               '__sm_ocall_spill': '__sm_{}_ocall_spill'.format(sm),
+               '__sm_secret_start': '__sm_{}_secret_start'.format(sm),
+               '__sm_secret_end': '__sm_{}_secret_end'.format(sm),
                '__sm_isr'        : '__sm_{}_isr'.format(sm),
                '__sm_isr_func'   : '__sm_{}_isr_func'.format(sm),
                '__sm_nentries'   : nentries,
@@ -619,7 +622,9 @@ for sm in sms:
         sancus.paths.get_data_path() + '/' + isr_file_name, sym_map, sect_map)
     exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_exit.o',
                                   sym_map, sect_map)
-    input_files += [entry_file, isr_file, exit_file]
+    ocall_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_ocall_spill.o',
+                                  sym_map, sect_map)
+    input_files += [entry_file, isr_file, exit_file, ocall_file]
 
     extra_labels = ['__isr_{} = .;'.format(n) for n in sms_irq_handlers[sm]]
 

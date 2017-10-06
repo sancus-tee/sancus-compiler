@@ -17,11 +17,13 @@ struct SancusModuleInfo
     std::string getSpName() const;
     std::string getEntryName() const;
     std::string getExitName() const;
+    std::string getSpillName() const;
     std::string getVerifyName() const;
     std::string getIndexName(const std::string& entry) const;
     std::string getCalleeIdName(const std::string& callee) const;
     std::string getCalleeMacName(const std::string& callee) const;
     std::string getCalleeStubName(const std::string& callee) const;
+    std::string getSpillStubName(const std::string& callee, const int size) const;
 };
 
 #endif

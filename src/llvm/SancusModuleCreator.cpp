@@ -189,11 +189,58 @@ bool SancusModuleCreator::handleFunction(Function& f)
             verifications[inst] = v;
         }
 
+        //TODO vararg: call ocall_spill with cs.arg_size() before branching to stub
+        //TODO keep track of var args stubs in stubs map..
         Function* stub = getStub(f, *callee);
+        SancusModuleInfo callerInfo = getSancusModuleInfo(&f);
+        if (!callerInfo.name.empty() && callee->isVarArg())
+        {
+            std::string calleeName = fixSymbolName(callee->getName());
+            std::string stubName = callerInfo.getSpillStubName(calleeName, cs.arg_size());
+            std::string stubAsm = "\t.align 2\n"
+                "\t.section " + callerInfo.getTextSection() + ",\"ax\",@progbits\n"
+                "\t.weak " + stubName + "\n" +
+                stubName + ":\n"
+                "\tpush r6\n"
+                "\tpush r7\n"
+                "\tpush r8\n"
+                "\tmov #" + std::to_string(cs.arg_size()) + ", r6\n"
+                "\tcall #" + callerInfo.getSpillName() + "\n"
+                "\tbr #" + callerInfo.getCalleeStubName(calleeName) + "\n";
+            f.getParent()->appendModuleInlineAsm(stubAsm);
+            stub = Function::Create(callee->getFunctionType(),
+                                Function::ExternalLinkage, stubName, f.getParent());
+        }
         cs.setCalledFunction(stub);
 
         if (stub != callee)
             modified = true;
+    
+#if 0
+    FunctionCcInfo ccInfo(callee);
+    if (callee->isVarArg())
+    {
+        printf("\tnum args is %d\n", cs.arg_size());
+    }
+
+
+    //if (cs.arg_size() > 0)
+    if (ccInfo.argsLength != 0 || callee->isVarArg())
+    {
+    auto args = std::vector<Value*>{cs.getArgument(0)};
+    auto argTys = std::vector<Type*>{cs.getArgument(0)->getType()};
+
+        //callee->getArgumentList().pop_front();
+        auto asmStr = Twine("\tnop\n\tpush $0\n").str();
+        auto constraintsStr = "X";
+        auto asmFuncTy = FunctionType::get(voidTy, argTys, /*isVarArg=*/false);
+        auto inlineAsm = InlineAsm::get(asmFuncTy, asmStr, constraintsStr,
+                                    /*hasSideEffects=*/true);
+        
+        CallInst::Create(inlineAsm, args, /*nameStr=*/ "", /*insertBefore=*/ cs.getInstruction()); 
+        modified = true;
+    }
+#endif
     }
 
     for (auto pair : verifications)
@@ -362,6 +409,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
         std::string stubName = callerInfo.getCalleeStubName(calleeName);
         Twine regsUsage = Twine(ccInfo.argRegsUsage);
         std::string brName = callerInfo.getExitName();
+        std::string spillStub = "";
 
         std::string idxName, entryName;
         if (!calleeInfo.name.empty()) // call to SM
@@ -375,13 +423,24 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
             entryName = "__unprotected_entry";
         }
 
+        if (!callee.isVarArg())
+        {
+            spillStub += "\tpush r6\n"
+                         "\tpush r7\n"
+                         "\tpush r8\n";
+        }
+
+        if (ccInfo.argsLength)
+        {
+            spillStub += "\tmov #" + std::to_string(ccInfo.argsLength) + ", r6\n" +
+                         "\tcall #" + callerInfo.getSpillName() + "\n";
+        }
+
         stubAsm = Twine("\t.align 2\n"
                         "\t.section " + sectionName + ",\"ax\",@progbits\n"
-                        "\t.weak " + stubName + + "\n" +
-                        stubName + ":\n"
-                        "\tpush r6\n"
-                        "\tpush r7\n"
-                        "\tpush r8\n"
+                        "\t.weak " + stubName + "\n" +
+                        stubName + ":\n" +
+                        spillStub +
                         "\tmov #" + idxName + ", r6\n"
                         "\tmov #" + regsUsage + ", r7\n"
                         "\tmov #" + entryName + ", r8\n"
@@ -392,6 +451,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
                                 Function::ExternalLinkage, stubName, m);
     }
 
+#if 0
     if (stub != &callee && (ccInfo.argsLength != 0 ||
                             ccInfo.retLength != 0  ||
                             callee.isVarArg()))
@@ -401,6 +461,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
                            "and/or return value passing. This is not "
                            "supported for SMs.");
     }
+#endif
 
     if (!stubAsm.empty())
         m->appendModuleInlineAsm(stubAsm);
