@@ -18,6 +18,7 @@ KEY_SIZE = config.SECURITY
 
 _lib = ctypes.cdll.LoadLibrary(paths.get_data_path() + '/libsancus-crypto.so')
 
+dump_c_array = 0
 
 class Error(Exception):
     pass
@@ -46,9 +47,25 @@ def _print_data(data):
         print()
 
 
-def _output_data(data):
+def _output_data(data, dump_c_array=False):
     if sys.stdout.isatty():
-        print(_get_hex_str(data))
+        s = _get_hex_str(data)
+        if dump_c_array:
+            print('uint8_t key[] = {', end=' ');
+
+            i = 0
+            h = ''
+            for c in s:
+                if (i % 2) == 0:
+                    h = c
+                else:
+                    print('0x' + h + c, end=', ')
+                i = i + 1
+
+            sys.stdout.write('\b \b\b')
+            print('};')
+        else:
+            print(s)
     else:
         sys.stdout.buffer.write(data)
 
@@ -193,13 +210,17 @@ def wrap_sm_text_sections(file, output_path, key):
 
 
 def main():
-    # FIXME this should really be cleaned up!
     parser = argparse.ArgumentParser()
+
+    # FIXME this should really be cleaned up!
     parser.add_argument('--verbose',
                         help='Show information messages',
                         action='store_true')
     parser.add_argument('--debug',
                         help='Show debug output and keep intermediate files',
+                        action='store_true')
+    parser.add_argument('--c-array',
+                        help='Print generated key in copy-paste C uint8_t array format',
                         action='store_true')
     parser.add_argument('--mac',
                         help='Generate MAC for SM',
@@ -252,7 +273,7 @@ def main():
         logging.getLogger().setLevel(logging.INFO)
 
     if args.gen_vendor_key:
-        _output_data(mac(args.key, args.gen_vendor_key))
+        _output_data(mac(args.key, args.gen_vendor_key), args.c_array)
     elif args.wrap:
         ad, body = args.wrap
         cipher, tag = wrap(args.key, ad, body)
@@ -274,7 +295,7 @@ def main():
     else:
         with open(args.in_file, 'rb') as file:
             if args.gen_sm_key:
-                _output_data(get_sm_key(file, args.gen_sm_key, args.key))
+                _output_data(get_sm_key(file, args.gen_sm_key, args.key), args.c_array)
             else:
                 if not args.out_file:
                     raise Error('Requested to fill MAC sections or wrap text '
