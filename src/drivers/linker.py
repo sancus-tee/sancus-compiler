@@ -535,6 +535,10 @@ data_section = '''. = ALIGN(2);
     . = ALIGN(2);
     {3}
     {4}
+    __sm_{0}_sp_addr = .;          /* make sure this is the last address in data
+                                  section, as HW IRQ logic will store SP here */
+    . += 2;
+    . = ALIGN(2);
     __sm_{0}_secret_end = .;'''
 
 mac_section = '''.data.sm.{0}.mac.{1} :
@@ -588,10 +592,12 @@ for sm in sms:
                '__sm_isr_func'   : '__sm_{}_isr_func'.format(sm),
                '__sm_nentries'   : nentries,
                '__sm_table'      : '__sm_{}_table'.format(sm),
+               '__sm_sp_addr'    : '__sm_{}_sp_addr'.format(sm),
                '__sm_sp'         : '__sm_{}_sp'.format(sm),
                '__sm_irq_sp'     : '__sm_{}_irq_sp'.format(sm),
-               '__sm_tmp'     : '__sm_{}_tmp'.format(sm),
+               '__sm_tmp'        : '__sm_{}_tmp'.format(sm),
                '__ret_entry'     : '__sm_{}_ret_entry'.format(sm),
+               '__reti_entry'    : '__sm_{}_reti_entry'.format(sm),
                '__sm_exit'       : '__sm_{}_exit'.format(sm),
                '__sm_stack_init' : '__sm_{}_stack_init'.format(sm),
                '__sm_verify'     : '__sm_{}_verify'.format(sm)}

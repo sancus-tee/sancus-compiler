@@ -6,18 +6,25 @@
     ; r6: ID of entry point to be called, 0xffff if returning
     ; r7: return address
 __sm_entry:
+    ; === need a secure stack to handle IRQs ===
+    dint
+
     ; If we are here because of an IRQ, we will need the current SP later. We do
     ; do not store it in its final destination yet (__sm_irq_sp) because we may
     ; not actually be called by an IRQ in which case we might overwrite a stored
     ; stack pointer.
     mov r1, &__sm_tmp
     # Switch stack.
+    mov #__sm_sp, &__sm_sp_addr
     mov &__sm_sp, r1
     cmp #0x0, r1
     jne 1f
     mov #__sm_stack_init, r1
 
 1:
+    ; === safe to handle IRQs now ===
+    eint
+
     ; check of this is an IRQ
     push r15
     ; sancus_get_caller_id()

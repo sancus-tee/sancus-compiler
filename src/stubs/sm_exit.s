@@ -41,6 +41,13 @@ __sm_exit:
     br r8
 
     .align 2
+    .global __reti_entry
+    .type __reti_entry,@function
+__reti_entry:
+    ; TODO implement
+
+
+    .align 2
     .global __ret_entry
     .type __ret_entry,@function
 __ret_entry:
