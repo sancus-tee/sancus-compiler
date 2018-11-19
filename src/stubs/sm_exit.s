@@ -36,7 +36,7 @@ __sm_exit:
     ; store sp
     mov r1, &__sm_sp
 
-    ; call the entry point
+    ; pass the entry point as return address
     mov #__sm_entry, r7
     br r8
 
@@ -44,9 +44,21 @@ __sm_exit:
     .global __reti_entry
     .type __reti_entry,@function
 __reti_entry:
-    ; TODO implement
-
-
+    pop r4
+    pop r5
+    pop r6
+    pop r7
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    
+    reti
+        
     .align 2
     .global __ret_entry
     .type __ret_entry,@function
