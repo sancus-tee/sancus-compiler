@@ -24,9 +24,18 @@ __sm_entry:
     mov #__sm_stack_init, r1
 
 1:
+    ; check if this is a return from a interrupt
+    bit #0x1, &__sm_sp
+
+1:    
     ; === safe to handle IRQs now ===
     eint
+    
+    jz 1f
+    ; restore execution state if the sm was resumed
+    br #__reti_entry ; defined in exit.s
 
+1:
     ; check of this is an IRQ
     push r15
     ; sancus_get_caller_id()
@@ -49,13 +58,7 @@ __sm_entry:
     br #__sm_isr
 1:
     pop r15
-
-    ; check if this is a return from a interrupt
-    bit #0x1, &__sm_sp 
-    jeq 1f
-    br #__reti_entry ; defined in exit.s
-
-1:  
+    
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f

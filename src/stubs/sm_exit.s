@@ -57,6 +57,9 @@ __reti_entry:
     pop r14
     pop r15
     
+    ; clear bit 0
+    bic #0x1, &__sm_sp
+    
     reti
         
     .align 2
