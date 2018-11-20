@@ -27,7 +27,6 @@ __sm_entry:
     ; check if this is a return from a interrupt
     bit #0x1, &__sm_sp
 
-1:    
     ; === safe to handle IRQs now ===
     eint
     
