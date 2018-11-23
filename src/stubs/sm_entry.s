@@ -15,16 +15,26 @@ __sm_entry:
     ; stack pointer.
     mov r1, &__sm_tmp
     # Switch stack.
+    ; __sm_sp is our stackpointer
     mov #__sm_sp, &__sm_sp_addr
     mov &__sm_sp, r1
+    ; initialize sp on first entry
     cmp #0x0, r1
     jne 1f
     mov #__sm_stack_init, r1
 
 1:
+    ; check if this is a return from a interrupt
+    bit #0x1, &__sm_sp
+
     ; === safe to handle IRQs now ===
     eint
+    
+    jz 1f
+    ; restore execution state if the sm was resumed
+    br #__reti_entry ; defined in exit.s
 
+1:
     ; check of this is an IRQ
     push r15
     ; sancus_get_caller_id()
@@ -41,13 +51,13 @@ __sm_entry:
     ; a reset inside an SM (since the reset will disable all SMs), we simply
     ; ignore it here so that normal entry points can still be used.
     cmp #0xffff, r15
+    jeq 1f
     ; If we just do je __sm_isr we get a PCREL relocation which our runtime
     ; linker doesn't understand yet.
-    jeq 1f
     br #__sm_isr
 1:
     pop r15
-
+    
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
