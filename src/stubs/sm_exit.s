@@ -33,6 +33,8 @@ __sm_exit:
     jc 1f
     clr r15
 1:
+    ; atomic leaving of sm
+    dint
     ; store sp
     mov r1, &__sm_sp
 
@@ -57,7 +59,9 @@ __reti_entry:
     pop r14
     pop r15
     
-    ; clear bit 0
+    ; clear bit 0 
+    ; maybe we also should store stackpointer
+    ; or we assume: reti never jumps out of sm
     bic #0x1, &__sm_sp
     
     reti

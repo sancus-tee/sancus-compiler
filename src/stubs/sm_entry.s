@@ -113,6 +113,8 @@ __sm_entry:
     clr r15
 
 1:
+    ; atomic leaving
+    dint
     mov r1, &__sm_sp
     mov #0xffff, r6
     br r7
