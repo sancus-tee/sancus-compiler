@@ -114,6 +114,7 @@ sm_id sancus_enable(struct SancusModule* sm);
  */
 sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 
+#undef always_inline
 #define always_inline static inline __attribute__((always_inline))
 
 /**
@@ -158,7 +159,7 @@ always_inline sm_id sancus_verify_address(const void* expected_tag,
         "mov r15, %0"
         : "=m"(ret)
         : "r"(address), "r"(expected_tag)
-        : "r14", "r15");
+        : "14", "15");
     return ret;
 }
 
@@ -196,7 +197,7 @@ always_inline int sancus_verify_caller(const void* expected_tag)
         "mov r15, %0"
         : "=m"(ret)
         : "r"(expected_tag)
-        : "r15");
+        : "15");
     return ret;
 }
 
@@ -251,7 +252,7 @@ always_inline int sancus_wrap_with_key(const void* key,
           "m"(ad), "m"(ad_end),
           "m"(body), "m"(body_end),
           "m"(cipher), "m"(tag)
-        : "r9", "r10", "r11", "r12", "r13", "r14", "r15");
+        : "9", "10", "11", "12", "13", "14", "15");
 
     return ret;
 }
@@ -299,7 +300,7 @@ always_inline int sancus_unwrap_with_key(const void* key,
           "m"(ad), "m"(ad_end),
           "m"(cipher), "m"(cipher_end),
           "m"(body), "m"(tag)
-        : "r9", "r10", "r11", "r12", "r13", "r14", "r15");
+        : "9", "10", "11", "12", "13", "14", "15");
 
     return ret;
 }
@@ -347,7 +348,7 @@ always_inline sm_id sancus_get_id(void* addr)
         "mov r15, %0"
         : "=m"(ret)
         : "m"(addr)
-        : "r15");
+        : "15");
     return ret;
 }
 
@@ -374,7 +375,7 @@ always_inline sm_id sancus_get_caller_id(void)
         "mov r15, %0"
         : "=m"(ret)
         :
-        : "r15");
+        : "15");
     return ret;
 }
 
@@ -515,7 +516,11 @@ extern char __unprotected_sp;
  * void __attribute__((interrupt(SM_VECTOR))) the_isr(void) {...}
  * @endcode
  */
+#if __GNUC__ < 5
 #define SM_VECTOR 26
+#else
+#define SM_VECTOR 14
+#endif
 
 /**
  * Return value of sancus_get_caller_id() for unprotected code.

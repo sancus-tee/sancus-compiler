@@ -18,7 +18,7 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag)
           "m"(sm->vendor_id),
           "m"(sm->public_start), "m"(sm->public_end),
           "m"(sm->secret_start), "m"(sm->secret_end)
-        : "r9", "r10", "r11", "r12", "r13", "r14", "r15");
+        : "9", "10", "11", "12", "13", "14", "15");
 
     return sm->id;
 }

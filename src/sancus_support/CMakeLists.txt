@@ -11,6 +11,10 @@ set(SRC_HOST
     unprotected_entry.s
 )
 
+set_source_files_properties(unprotected_entry.s 
+                            PROPERTIES 
+                            COMPILE_FLAGS "-mmcu=${MCU}")
+
 add_library(sancus-sm-support STATIC ${SRC_SM})
 add_library(sancus-host-support STATIC ${SRC_HOST})
 
