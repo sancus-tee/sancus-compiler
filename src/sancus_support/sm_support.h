@@ -516,10 +516,10 @@ extern char __unprotected_sp;
  * void __attribute__((interrupt(SM_VECTOR))) the_isr(void) {...}
  * @endcode
  */
-#if __GNUC__ < 5
-#define SM_VECTOR 26
-#else
+#if __GNUC__ >= 5
 #define SM_VECTOR 14
+#else
+#define SM_VECTOR 26
 #endif
 
 /**
