@@ -5,55 +5,42 @@
 
 #include <stddef.h>
 
-/**
- * Type used to represent the internal ID of an SM assigned by Sancus.
- *
- * Note that 0 is an invalid ID so it is often used to indicate an error
- * condition.
- */
-typedef unsigned sm_id;
+#if __GNUC__ >= 5 || __clang_major__ >= 5
 
-/**
- * Type used to represent vendor IDs.
- */
-typedef unsigned vendor_id;
+#define __PS(name) sllvm_pm_##name##_text_start
+#define __PE(name) sllvm_pm_##name##_text_end
+#define __SS(name) sllvm_pm_##name##_data_start
+#define __SE(name) sllvm_pm_##name##_data_end
 
-/**
- * Type used to represent the index of an entry point.
- */
-typedef unsigned entry_idx;
+#define SM_GET_WRAP_NONCE(sm) ({      \
+    extern unsigned sllvm_nonce_##sm; \
+    sllvm_nonce_##sm;                 \
+})
+#define SM_GET_WRAP_TAG(sm) ({                   \
+    extern char sllvm_tag_##sm[SANCUS_TAG_SIZE]; \
+    sllvm_tag_##sm;                              \
+})
 
-/**
- * Structure containing all the relevant information of a Sancus module.
- *
- * Note that #id will only be correct after a call to sancus_enable().
- */
-struct SancusModule
-{
-    sm_id id;               ///< Sancus ID.
-    vendor_id vendor_id;    ///< ID of the vendor of this module.
-    const char* name;       ///< Name of this module.
-    void* public_start;     ///< Start address of the public section
-    void* public_end;       ///< End address of the public section
-    void* secret_start;     ///< Start address of the secret section
-    void* secret_end;       ///< End address of the secret section
-};
+#define DECLARE_SM(name, vendor_id)  \
+    extern char __PS(name);          \
+    extern char __PE(name);          \
+    extern char __SS(name);          \
+    extern char __SE(name);          \
+    extern struct SancusModule name;
+#define DECLARE_MMIO_SM(name, secret_start, secret_end, vendor) \
+  DECLARE_SM(name, vendor)
+
+#define SM_DATA(name) static
+#define SM_FUNC(name) static
+#define SM_ENTRY(name) __attribute__((eentry))
+#define SM_MMIO_ENTRY(name) __attribute__((eentry))
+
+#else
 
 #define __PS(name) __sm_##name##_public_start
 #define __PE(name) __sm_##name##_public_end
 #define __SS(name) __sm_##name##_secret_start
 #define __SE(name) __sm_##name##_secret_end
-
-#define __OUTSIDE_SM( p, sm )                                                  \
-    ( ((void*) p < (void*) &__PS(sm)) || ((void*) p >= (void*) &__PE(sm)) ) && \
-    ( ((void*) p < (void*) &__SS(sm)) || ((void*) p >= (void*) &__SE(sm)) )
-
-/*
- * Returns true iff whole buffer [p,p+len-1] is outside of the sm SancusModule
- */
-#define sancus_is_outside_sm( sm, p, len)                                       \
-    ( __OUTSIDE_SM(p, sm) && __OUTSIDE_SM((p+len-1), sm) )
-
 
 /**
  * This macro can be used to declare a SancusModule structure.
@@ -87,6 +74,208 @@ struct SancusModule
 
 #define DECLARE_MMIO_SM(name, secret_start, secret_end, vendor)     \
     DECLARE_MMIO_SM_AUX(name, secret_start, secret_end, vendor)
+
+
+void __unprotected_entry(void);
+extern char __unprotected_sp;
+
+#define __ANNOTATE(x) __attribute__((annotate(x)))
+#define __STR(x) #x
+
+/**
+ * Annotation for module entry points.
+ *
+ * Use as follows:
+ * @code
+ * void SM_ENTRY("mod_name") entry_name(void) {...}
+ * @endcode
+ */
+#define SM_ENTRY(name) __ANNOTATE("sm_entry:" __STR(name)) \
+                       __attribute__((noinline, used))
+
+#define SM_MMIO_ENTRY(name) __ANNOTATE("sm_mmio_entry:" __STR(name)) \
+                       __attribute__((noinline, used, naked))
+
+/**
+ * Annotation for internal module function (i.e., not entry points).
+ *
+ * @see SM_ENTRY()
+ */
+#define SM_FUNC(name)  __ANNOTATE("sm:" __STR(name))
+
+/**
+ * Annotation for data the should be part of the secret section.
+ *
+ * Note that the secret section is always zero-initialized. This means that data
+ * cannot be initialized if it is to be placed in the secret section.
+ *
+ * Use as follows:
+ * @code
+ * int SM_DATA("mod_name") data_name;
+ * @endcode
+ */
+#define SM_DATA(name)  SM_FUNC(name)
+
+/**
+ * Macro to create an ISR inside an SM. Inside the ISR, you can use the variable
+ * num_name to get the IRQ number that cause the execution of the ISR.
+ *
+ * Use as follows:
+ * @code
+ * SM_ISR(mod_name, num_name) {...}
+ * @endcode
+ */
+#define SM_ISR(name, num_name) void SM_FUNC(name) __attribute__((used)) \
+                               __sm_##name##_isr_func(unsigned num_name)
+
+/**
+ * Macro to indicate that you want to handle a certain IRQ (specified by
+ * irq_num) inside the SM with name sm_name. Note that using this macro without
+ * having an SM_ISR() function will just ignore the IRQ.
+ */
+#define SM_HANDLE_IRQ(sm_name, irq_num)                                 \
+    asm(".global __sm_" #sm_name "_handles_irq_" #irq_num "\n"          \
+                "__sm_" #sm_name "_handles_irq_" #irq_num " = 1\n")
+
+/**
+ * Macro to get the address of the entry point of SM @p sm.
+ */
+#define SM_GET_ENTRY(sm) ({         \
+    extern char __sm_##sm##_entry;  \
+    (void*)&__sm_##sm##_entry;      \
+})
+
+/**
+ * Macro to get the index of entry point @p entry of SM @p sm.
+ *
+ * Both arguments should be names without quotes.
+ */
+#define SM_GET_ENTRY_IDX(sm, entry) ({              \
+    extern char __sm_##sm##_entry_##entry##_idx;    \
+    (entry_idx)&__sm_##sm##_entry_##entry##_idx;    \
+})
+
+/**
+ * Macro to get a pointer to the tag used by @p caller to verify @p callee.
+ *
+ * Both arguments should be names without quotes.
+ */
+#define SM_GET_TAG(caller, callee) ({           \
+    extern char __sm_##caller##_mac_##callee;   \
+    (void*)&__sm_##caller##_mac_##callee;       \
+})
+
+/**
+ * Macro to get a pointer to the ID of @p callee that is used by @p caller after
+ * the initial verification.
+ *
+ * Both arguments should be names without quotes.
+ */
+#define SM_GET_VERIFY_ID(caller, callee) ({     \
+    extern char __sm_##caller##_id_##callee;    \
+    (sm_id*)&__sm_##caller##_id_##callee;       \
+})
+
+/**
+ * Macro to get the nonce used for wrapping sm.
+ */
+#define SM_GET_WRAP_NONCE(sm) ({            \
+    extern unsigned __sm_##sm##_wrap_nonce; \
+    __sm_##sm##_wrap_nonce;                 \
+})
+
+/**
+ * Macro to get the tag produced by wrapping sm.
+ */
+#define SM_GET_WRAP_TAG(sm) ({          \
+    extern char __sm_##sm##_wrap_tag;   \
+    (void*)&__sm_##sm##_wrap_tag;       \
+})
+
+#endif
+
+#define __OUTSIDE_SM( p, sm )                                                  \
+    ( ((void*) p < (void*) &__PS(sm)) || ((void*) p >= (void*) &__PE(sm)) ) && \
+    ( ((void*) p < (void*) &__SS(sm)) || ((void*) p >= (void*) &__SE(sm)) )
+
+/*
+ * Returns true iff whole buffer [p,p+len-1] is outside of the sm SancusModule
+ */
+#define sancus_is_outside_sm( sm, p, len) \
+    ( __OUTSIDE_SM(p, sm) && __OUTSIDE_SM((p+len-1), sm) )
+
+/**
+ * Interrupt vector for the Sancus violation ISR.
+ *
+ * Use as follows:
+ * @code
+ * void __attribute__((interrupt(SM_VECTOR))) the_isr(void) {...}
+ * @endcode
+ */
+#if __GNUC__ >= 5 || __clang_major__ >= 5
+#define SM_VECTOR 14
+#else
+#define SM_VECTOR 26
+#endif
+
+/**
+ * Return value of sancus_get_caller_id() for unprotected code.
+ */
+#define SM_ID_UNPROTECTED 0
+
+/**
+ * Return value of sancus_get_caller_id() for an IRQ.
+ */
+#define SM_ID_IRQ 0xffff
+
+/**
+ * The number of bits security offered by the crypto functions
+ */
+#define SANCUS_SECURITY CONFIG_SECURITY
+
+/**
+ * The size of the tags used and produces by the crypto functions.
+ */
+#define SANCUS_TAG_SIZE (SANCUS_SECURITY / 8)
+
+/**
+ * The size of the keys used by the crypto functions.
+ */
+#define SANCUS_KEY_SIZE (SANCUS_SECURITY / 8)
+
+/**
+ * Type used to represent the internal ID of an SM assigned by Sancus.
+ *
+ * Note that 0 is an invalid ID so it is often used to indicate an error
+ * condition.
+ */
+typedef unsigned sm_id;
+
+/**
+ * Type used to represent vendor IDs.
+ */
+typedef unsigned vendor_id;
+
+/**
+ * Type used to represent the index of an entry point.
+ */
+typedef unsigned entry_idx;
+
+/**
+ * Structure containing all the relevant information of a Sancus module.
+ *
+ * Note that #id will only be correct after a call to sancus_enable().
+ */
+struct SancusModule
+{
+    sm_id id;               ///< Sancus ID.
+    vendor_id vendor_id;    ///< ID of the vendor of this module.
+    const char* name;       ///< Name of this module.
+    void* public_start;     ///< Start address of the public section
+    void* public_end;       ///< End address of the public section
+    void* secret_start;     ///< Start address of the secret section
+    void* secret_end;       ///< End address of the secret section
+};
 
 /**
  * Enables the protection of the given module.
@@ -391,161 +580,6 @@ always_inline sm_id sancus_get_caller_id(void)
  * @note This function is implemented as a compiler intrinsic.
  */
 unsigned sancus_call(void* entry, entry_idx index, ...);
-
-void __unprotected_entry(void);
-extern char __unprotected_sp;
-
-#define __ANNOTATE(x) __attribute__((annotate(x)))
-#define __STR(x) #x
-
-/**
- * Annotation for module entry points.
- *
- * Use as follows:
- * @code
- * void SM_ENTRY("mod_name") entry_name(void) {...}
- * @endcode
- */
-#define SM_ENTRY(name) __ANNOTATE("sm_entry:" __STR(name)) \
-                       __attribute__((noinline, used))
-
-#define SM_MMIO_ENTRY(name) __ANNOTATE("sm_mmio_entry:" __STR(name)) \
-                       __attribute__((noinline, used, naked))
-
-/**
- * Annotation for internal module function (i.e., not entry points).
- *
- * @see SM_ENTRY()
- */
-#define SM_FUNC(name)  __ANNOTATE("sm:" __STR(name))
-
-/**
- * Annotation for data the should be part of the secret section.
- *
- * Note that the secret section is always zero-initialized. This means that data
- * cannot be initialized if it is to be placed in the secret section.
- *
- * Use as follows:
- * @code
- * int SM_DATA("mod_name") data_name;
- * @endcode
- */
-#define SM_DATA(name)  SM_FUNC(name)
-
-/**
- * Macro to create an ISR inside an SM. Inside the ISR, you can use the variable
- * num_name to get the IRQ number that cause the execution of the ISR.
- *
- * Use as follows:
- * @code
- * SM_ISR(mod_name, num_name) {...}
- * @endcode
- */
-#define SM_ISR(name, num_name) void SM_FUNC(name) __attribute__((used)) \
-                               __sm_##name##_isr_func(unsigned num_name)
-
-/**
- * Macro to indicate that you want to handle a certain IRQ (specified by
- * irq_num) inside the SM with name sm_name. Note that using this macro without
- * having an SM_ISR() function will just ignore the IRQ.
- */
-#define SM_HANDLE_IRQ(sm_name, irq_num)                                 \
-    asm(".global __sm_" #sm_name "_handles_irq_" #irq_num "\n"          \
-                "__sm_" #sm_name "_handles_irq_" #irq_num " = 1\n")
-
-/**
- * Macro to get the address of the entry point of SM @p sm.
- */
-#define SM_GET_ENTRY(sm) ({         \
-    extern char __sm_##sm##_entry;  \
-    (void*)&__sm_##sm##_entry;      \
-})
-
-/**
- * Macro to get the index of entry point @p entry of SM @p sm.
- *
- * Both arguments should be names without quotes.
- */
-#define SM_GET_ENTRY_IDX(sm, entry) ({              \
-    extern char __sm_##sm##_entry_##entry##_idx;    \
-    (entry_idx)&__sm_##sm##_entry_##entry##_idx;    \
-})
-
-/**
- * Macro to get a pointer to the tag used by @p caller to verify @p callee.
- *
- * Both arguments should be names without quotes.
- */
-#define SM_GET_TAG(caller, callee) ({           \
-    extern char __sm_##caller##_mac_##callee;   \
-    (void*)&__sm_##caller##_mac_##callee;       \
-})
-
-/**
- * Macro to get a pointer to the ID of @p callee that is used by @p caller after
- * the initial verification.
- *
- * Both arguments should be names without quotes.
- */
-#define SM_GET_VERIFY_ID(caller, callee) ({     \
-    extern char __sm_##caller##_id_##callee;    \
-    (sm_id*)&__sm_##caller##_id_##callee;       \
-})
-
-/**
- * Macro to get the nonce used for wrapping sm.
- */
-#define SM_GET_WRAP_NONCE(sm) ({            \
-    extern unsigned __sm_##sm##_wrap_nonce; \
-    __sm_##sm##_wrap_nonce;                 \
-})
-
-/**
- * Macro to get the tag produced by wrapping sm.
- */
-#define SM_GET_WRAP_TAG(sm) ({          \
-    extern char __sm_##sm##_wrap_tag;   \
-    (void*)&__sm_##sm##_wrap_tag;       \
-})
-
-/**
- * Interrupt vector for the Sancus violation ISR.
- *
- * Use as follows:
- * @code
- * void __attribute__((interrupt(SM_VECTOR))) the_isr(void) {...}
- * @endcode
- */
-#if __GNUC__ >= 5
-#define SM_VECTOR 14
-#else
-#define SM_VECTOR 26
-#endif
-
-/**
- * Return value of sancus_get_caller_id() for unprotected code.
- */
-#define SM_ID_UNPROTECTED 0
-
-/**
- * Return value of sancus_get_caller_id() for an IRQ.
- */
-#define SM_ID_IRQ 0xffff
-
-/**
- * The number of bits security offered by the crypto functions
- */
-#define SANCUS_SECURITY CONFIG_SECURITY
-
-/**
- * The size of the tags used and produces by the crypto functions.
- */
-#define SANCUS_TAG_SIZE (SANCUS_SECURITY / 8)
-
-/**
- * The size of the keys used by the crypto functions.
- */
-#define SANCUS_KEY_SIZE (SANCUS_SECURITY / 8)
 
 #undef always_inline
 
