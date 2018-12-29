@@ -7,5 +7,3 @@ if(MSP430_GCC_PREFIX STREQUAL msp430-elf)
 else()
   set(mcu msp430f149)
 endif()
-
-string(TOUPPER mcu MCU)
