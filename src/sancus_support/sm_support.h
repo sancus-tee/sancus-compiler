@@ -33,7 +33,7 @@
 #define SM_DATA(name) static
 #define SM_FUNC(name) static
 #define SM_ENTRY(name) __attribute__((eentry))
-#define SM_MMIO_ENTRY(name) __attribute__((eentry))
+#define SM_MMIO_ENTRY(name) __attribute__((eentry, naked))
 
 #else
 
