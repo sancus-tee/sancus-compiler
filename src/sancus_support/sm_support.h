@@ -27,6 +27,7 @@
     extern char __SS(name);          \
     extern char __SE(name);          \
     extern struct SancusModule name;
+
 #define DECLARE_MMIO_SM(name, secret_start, secret_end, vendor) \
   DECLARE_SM(name, vendor)
 
