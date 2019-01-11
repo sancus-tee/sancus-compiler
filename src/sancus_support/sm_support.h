@@ -31,8 +31,8 @@
 #define DECLARE_MMIO_SM(name, secret_start, secret_end, vendor) \
   DECLARE_SM(name, vendor)
 
-#define SM_DATA(name) static
-#define SM_FUNC(name) static
+#define SM_DATA(name) __attribute__((edata))
+#define SM_FUNC(name) __attribute__((efunc))
 #define SM_ENTRY(name) __attribute__((eentry))
 #define SM_MMIO_ENTRY(name) __attribute__((eentry, naked))
 
