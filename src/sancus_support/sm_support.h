@@ -31,6 +31,10 @@
 #define DECLARE_MMIO_SM(name, secret_start, secret_end, vendor) \
   DECLARE_SM(name, vendor)
 
+#define DECLARE_EXCLUSIVE_MMIO_SM(                                           \
+                         name, secret_start, secret_end, caller_id, vendor)  \
+  DECLARE_SM(name, vendor)
+
 #define SM_DATA(name) __attribute__((edata(name)))
 #define SM_FUNC(name) __attribute__((efunc(name)))
 #define SM_ENTRY(name) __attribute__((eentry(name)))
