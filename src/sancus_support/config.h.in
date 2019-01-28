@@ -1,6 +1,8 @@
 #ifndef SANCUS_SUPPORT_CONFIG_H
 #define SANCUS_SUPPORT_CONFIG_H
 
+#ifndef CONFIG_SECURITY
 #define CONFIG_SECURITY ${SECURITY}
+#endif
 
 #endif

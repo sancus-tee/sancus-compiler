@@ -1,10 +1,13 @@
 include(FindPackageHandleStandardArgs)
 
-find_program(MSPGCC_EXECUTABLE msp430-gcc)
+# MSP430_GCC_PREFIX should be one of (msp430, msp430-elf)
+set(MSP430_GCC_PREFIX msp430 CACHE STRING "MSP430 GCC prefix")
+
+find_program(MSPGCC_EXECUTABLE ${MSP430_GCC_PREFIX}-gcc)
 
 get_filename_component(TMP ${MSPGCC_EXECUTABLE} REALPATH)
 get_filename_component(TMP ${TMP} PATH)
-get_filename_component(MSPGCC_BASE_DIR ${TMP}/../msp430 ABSOLUTE)
+get_filename_component(MSPGCC_BASE_DIR ${TMP}/../${MSP430_GCC_PREFIX} ABSOLUTE)
 set(TMP)
 set(MSPGCC_LIB_DIR ${MSPGCC_BASE_DIR}/lib)
 set(MSPGCC_INCLUDE_DIR ${MSPGCC_BASE_DIR}/include)
