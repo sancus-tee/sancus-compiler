@@ -348,6 +348,7 @@ Function* SancusModuleCreator::getStub(Function& caller, Function& callee)
                         "\tbr #" + brName + "\n"
                         "1:\n"
                         "\tmov &__unprotected_sp, r1\n"
+                        "\teint\n"
                         "\tpop r7\n"
                         "\tpop r6\n"
                         "\tret"
