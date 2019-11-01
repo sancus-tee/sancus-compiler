@@ -113,11 +113,8 @@ __sm_entry:
     clr r15
 
 1:
-    ; NOTE: disable interrupts to properly restore the enclave-private stack
-    dint
+    mov r1, &__sm_sp
     mov #0xffff, r6
-    ; interrupts are disabled now (1 cycle after dint)
-    mov #__sm_stack_init, &__sm_sp
     br r7
 
 .Lerror:
