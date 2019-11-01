@@ -56,12 +56,12 @@ __reti_entry:
     pop r13
     pop r14
     pop r15
-    
-    ; clear bit 0
-    bic #0x1, &__sm_sp
-    
+
+    ; clear sp
+    mov #0, &__sm_sp
+
     reti
-        
+
     .align 2
     .global __ret_entry
     .type __ret_entry,@function

@@ -29,7 +29,7 @@ __sm_entry:
 
     ; === safe to handle IRQs now ===
     eint
-    
+
     jz 1f
     ; restore execution state if the sm was resumed
     br #__reti_entry ; defined in exit.s
@@ -57,7 +57,7 @@ __sm_entry:
     br #__sm_isr
 1:
     pop r15
-    
+
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
@@ -113,8 +113,8 @@ __sm_entry:
     clr r15
 
 1:
-    mov r1, &__sm_sp
     mov #0xffff, r6
+    mov #0, &__sm_sp
     br r7
 
 .Lerror:
