@@ -504,6 +504,7 @@ text_section = '''.text.sm.{0} :
     . = ALIGN(2);
     {5}
     __sm_{0}_public_end = .;
+    KEEP(*(.sm.{0}.*.table)) /* Ensure that we are keeping all SM related sections in the elf file */
   }}'''
 
 mmio_text_section = '''.text.sm.{0} :
