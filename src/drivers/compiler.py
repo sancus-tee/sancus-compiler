@@ -34,6 +34,7 @@ parser.add_argument('--opt-plugin',
                     help='Specify the opt plugin file to use',
                     default='SancusModuleCreator.so')
 parser.add_argument('-gstabs+', action='store_true')
+parser.add_argument('-include', help="Add include flag as specified by gcc", action='append', default=[])
 
 args, cc_args = parser.parse_known_args()
 set_args(args)
@@ -77,6 +78,11 @@ else:
     init_bc = get_tmp('.bc')
     cc_args += ['-target', 'msp430-elf', '-c', '-emit-llvm',
                 '-o', init_bc, in_file]
+
+    # Add each include argument
+    for i in args.include:
+        cc_args += ['-include', i]
+    
     call_prog('clang', cc_args)
 
     opt_bc = get_tmp('.bc')
