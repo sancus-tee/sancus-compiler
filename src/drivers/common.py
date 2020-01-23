@@ -88,10 +88,10 @@ def cleanup():
     if tmp_files:
         if args.debug:
             debug('Keeping temporary files: ' + ', '.join(tmp_files))
-    else:
-        info('Cleaning up temporary files: ' + ', '.join(tmp_files))
-        rm(*tmp_files)
-        del tmp_files[:]
+        else:
+            info('Cleaning up temporary files: ' + ', '.join(tmp_files))
+            rm(*tmp_files)
+            del tmp_files[:]
 
 
 def call_prog(prog, arguments=[], get_output=False):
