@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import re
+import os
 import string
 from collections import defaultdict
 
@@ -175,12 +176,63 @@ parser.add_argument('--inline-arithmetic',
                     help='Intercept and securely inline integer arithmetic '
                     'routines inserted by the compiler back-end',
                     action='store_true')
+parser.add_argument('--scan-libraries-for-sm',
+                    help='Also scan libraries if they contain Sancus Modules. Only scans '
+                    'libraries that are given as a full path (-l:/path/to/file.a). '
+                    'As such, it does not scan -lm style libraries unnecessarily.',
+                    action='store_true')
 
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
 
 # Since we create our own linker script, remove the -mmcu argument.
 cli_ld_args = [a for a in cli_ld_args if not a.startswith('-mmcu')]
+
+# If not all input files were detected correctly, they might show up in cli_ld_args
+# Extract all .o and .a files from cli_ld_args and add them to the list of files to process
+object_files = [a for a in cli_ld_args if a.endswith('.o')]
+archive_files = [a for a in cli_ld_args if a.endswith('.a')]
+
+# Unpack archive files for scanning
+if args.scan_libraries_for_sm:
+    info("Archives to scan: " + str(archive_files))
+    for a in archive_files:
+        debug("Unpacking archive for Sancus SM inspection: " + a)
+        file_name = a
+        if ':' in a: 
+            # support calls such as -lib:/full/path
+            file_name = file_name.split(':')[1]
+
+        # Read file in python and check header
+        file_header = b''
+        with open(file_name, 'rb') as f:
+            file_header = f.read(7)
+        if file_header.decode("utf-8") == "!<thin>":
+            # We have a thin archive, just let ar print its contents and add those object files to the list
+            info("Unwrapping thin archive " + file_name)
+            thin_objects = call_prog("ar", arguments=["t", file_name], get_output=True)
+            object_files += thin_objects.decode("utf-8").splitlines()
+        else:
+            # Standard archive: Unpack to tmp dir and use those files instead
+            # Create tmp directory and temporarily switch to it
+            tmp_dir = get_tmp_dir()
+            info("Unpacking archive " + file_name + " to tmp dir " + tmp_dir)
+            cwd = os.getcwd()
+            os.chdir(tmp_dir)
+
+            # Extract objects from archive and add their full path to object_files list
+            call_prog("ar", arguments=["xv", file_name], get_output=True)
+            for path in os.listdir(tmp_dir):
+                object_files.append(os.path.join(tmp_dir, path))
+
+            # Return to working directory
+            os.chdir(cwd)
+
+            # Remove this library from the cli arguments to prevent a duplication of its inclusion in the elf file
+            cli_ld_args.remove(a)
+    debug("Extracted objects from archive files: " + str(object_files))
+else:
+    debug("Ignoring potential Sancus modules in libraries")
 
 if args.print_default_libs:
     lib_dir = sancus.paths.get_data_path() + '/lib'
@@ -207,18 +259,27 @@ added_set_key_stub = False
 added_input_stub = False
 added_output_stub = False
 
+# Create the list of all input files to be scanned for Sancus modules
+# These can either be the given input files, additional .o files or all files
+# that are contained in passed .a files.
 input_files = args.in_files[:]
+input_files_to_scan = input_files + object_files
+debug("List of all files to be scanned for possible Sancus Modules: " + str(input_files_to_scan) )
 i = 0
+generated_object_files = []
 
-while i < len(input_files):
-    file_name = input_files[i]
+while i < len(input_files_to_scan):
+    file_name = input_files_to_scan[i]
     i += 1
 
     try:
         with open(file_name, 'rb') as f:
+            debug("Processing file " + str(file_name))
+            processed_sections = []
             elf_file = ELFFile(f)
             for section in elf_file.iter_sections():
                 name = section.name
+                processed_sections.append(str(name))
                 match = re.match(r'.sm.(\w+).text', name)
                 if match:
                     sm_name = match.group(1)
@@ -328,21 +389,32 @@ while i < len(input_files):
                     sm, which, name = match.groups()
 
                     if not added_set_key_stub:
-                        input_files.append(create_io_stub(sm, 'sm_set_key.o'))
+                        # Generate the set key stub file
+                        generated_file = create_io_stub(sm, 'sm_set_key.o')
+                        generated_object_files.append(generated_file)
+                        # And register it to also be scanned by this loop later
+                        input_files_to_scan.append(generated_file)
                         added_set_key_stub = True
 
                     if which == 'input':
                         dest = sms_inputs
 
                         if not added_input_stub:
-                            input_files.append(create_io_stub(sm, 'sm_input.o'))
+                            # Generate the input stub file
+                            generated_file = create_io_stub(sm, 'sm_input.o')
+                            generated_object_files.append(generated_file)
+                            # And register it to also be scanned by this loop later
+                            input_files_to_scan.append(generated_file)
                             added_input_stub = True
                     else:
                         dest = sms_outputs
 
                         if not added_output_stub:
-                            input_files.append(create_io_stub(sm,
-                                                              'sm_output.o'))
+                            # Generate the input stub file
+                            generated_file = create_io_stub(sm, 'sm_output.o')
+                            generated_object_files.append(generated_file)
+                            # And register it to also be scanned by this loop later
+                            input_files_to_scan.append(generated_file)
                             added_output_stub = True
 
                     if not sm in dest:
@@ -363,6 +435,9 @@ while i < len(input_files):
                     sm, irq = match.groups()
                     sms_irq_handlers[sm].append(irq)
                     continue
+
+            debug("Processed sections: " + str(processed_sections))
+
     except IOError as e:
         fatal_error(str(e))
     except ELFError as e:
@@ -458,7 +533,7 @@ if args.inline_arithmetic:
                       }
             sect_map = {'.sm.text' : '.sm.{}.text'.format(sm)}
             obj = sancus.paths.get_data_path() + '/sm_{}.o'.format(sym)
-            input_files.append(rename_syms_sects(obj, sym_map, sect_map))
+            generated_object_files.append(rename_syms_sects(obj, sym_map, sect_map))
 
     for fn in elf_relocations:
         # add patched symbol names to infile
@@ -504,7 +579,7 @@ text_section = '''.text.sm.{0} :
     . = ALIGN(2);
     {5}
     __sm_{0}_public_end = .;
-    KEEP(*(.sm.{0}.*.table)) /* Ensure that we are keeping all SM related sections in the elf file */
+    KEEP(*(.sm.{0}.*.table))
   }}'''
 
 mmio_text_section = '''.text.sm.{0} :
@@ -617,7 +692,7 @@ for sm in sms:
 
         object = sancus.paths.get_data_path() + '/sm_verify.o'
         verify_file = rename_syms_sects(object, sym_map, sect_map)
-        input_files.append(verify_file)
+        generated_object_files.append(verify_file)
 
     entry_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_entry.o',
                                    sym_map, sect_map)
@@ -626,7 +701,7 @@ for sm in sms:
         sancus.paths.get_data_path() + '/' + isr_file_name, sym_map, sect_map)
     exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_exit.o',
                                   sym_map, sect_map)
-    input_files += [entry_file, isr_file, exit_file]
+    generated_object_files += [entry_file, isr_file, exit_file]
 
     extra_labels = ['__isr_{} = .;'.format(n) for n in sms_irq_handlers[sm]]
 
@@ -820,7 +895,7 @@ ld_libs = ['-lsancus-sm-support']
 
 if args.standalone:
     ld_libs += ['-lsancus-host-support']
-    ld_args += input_files + cli_ld_args + ld_libs
+    ld_args += input_files + object_files + generated_object_files + cli_ld_args + ld_libs
     call_prog('msp430-gcc', ld_args)
 else:
     # Since we are calling ld directly we have to transform all the -Wl options
@@ -832,5 +907,5 @@ else:
 
     # -d makes sure no COMMON symbols are created since these are annoying to
     # handle in the dynamic loader (and pretty useless anyway)
-    ld_args += ['-r', '-d'] + input_files + ld_libs
+    ld_args += ['-r', '-d'] + input_files + object_files + generated_object_files + ld_libs
     call_prog('msp430-ld', ld_args)
