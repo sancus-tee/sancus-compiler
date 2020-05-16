@@ -208,7 +208,7 @@ extern char __unprotected_sp;
  */
 #define sancus_is_outside_sm( sm, p, len) \
     ( __OUTSIDE_SM(p, sm) && ((len <= 0) || \
-    (__OUTSIDE_SM((p+len-1), sm) && ( ((void*)(p+len-1)) > ((void*)p) ))) )
+    (__OUTSIDE_SM((p+len-1), sm) && ( ((void*)(p+len-1)) >= ((void*)p) ))) )
 
 /**
  * Interrupt vector for the Sancus violation ISR.
