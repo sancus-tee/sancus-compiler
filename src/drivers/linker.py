@@ -593,6 +593,7 @@ mmio_text_section = '''.text.sm.{0} :
     {2}
     . = ALIGN(2);
     __sm_{0}_public_end = .;
+    KEEP(*(.sm.{0}.*.table))
   }}'''
 
 data_section = '''. = ALIGN(2);
