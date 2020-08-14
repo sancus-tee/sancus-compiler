@@ -14,9 +14,19 @@ __sm_entry:
     ; not actually be called by an IRQ in which case we might overwrite a stored
     ; stack pointer.
     mov r1, &__sm_tmp
-    # Switch stack.
-    ; __sm_sp is our stackpointer
-    mov #__sm_sp, &__sm_sp_addr
+
+    ; initialize SSA on first entry (if ssa_thread_id is 0x0)
+    ; Use r1 for this check as we just backed it up
+    mov #__sm_ssa_base_addr, r1
+    cmp #0x0, r1
+    jne 1f
+    ; If SSA address was not initialized, do it now
+    ; Technically, this could be set to any SSA but we have just one for now
+    mov #__sm_ssa_base, &__sm_ssa_base_addr
+    
+1:  
+    ; Now switch the stack to the ssa base
+    ; __sm_sp is our stackpointer, it lies at #ssa_base-2
     mov &__sm_sp, r1
     ; initialize sp on first entry
     cmp #0x0, r1

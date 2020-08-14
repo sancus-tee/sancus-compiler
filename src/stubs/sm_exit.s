@@ -44,6 +44,8 @@ __sm_exit:
     .global __reti_entry
     .type __reti_entry,@function
 __reti_entry:
+    ; Pop registers backwards from SSA end -> SSA base
+    mov #__sm_ssa_base-28, r1
     pop r4
     pop r5
     pop r6
@@ -56,11 +58,14 @@ __reti_entry:
     pop r13
     pop r14
     pop r15
+    pop r2
 
-    ; clear sp
+    ; restore sp and clear memory pointer
+    mov &__sm_sp, r1
     mov #0, &__sm_sp
 
-    reti
+    ; branch to pc (r2 already restored manually above)
+    br &__sm_pc
 
     .align 2
     .global __ret_entry

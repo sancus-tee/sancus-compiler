@@ -603,7 +603,15 @@ data_section = '''. = ALIGN(2);
     {1}
     . += {2};
     __sm_{0}_stack_init = .;
+    . += 2;
+    __sm_{0}_ssa_end = .;
+    . += 26;
     __sm_{0}_sp = .;
+    . += 2;
+    __sm_{0}_ssa_base = .;
+    __sm_{0}_pc = .;
+    . += 2;
+    __sm_{0}_ssa_thread_id = .;
     . += 2;
     __sm_{0}_irq_sp = .;
     . += 2;
@@ -612,8 +620,8 @@ data_section = '''. = ALIGN(2);
     . = ALIGN(2);
     {3}
     {4}
-    __sm_{0}_sp_addr = .;          /* make sure this is the last address in data
-                                  section, as HW IRQ logic will store SP here */
+    __sm_{0}_ssa_base_addr = .;          /* make sure this is the last address in data
+                                  section, as HW IRQ logic will look for SSA base pointer here */
     . += 2;
     . = ALIGN(2);
     __sm_{0}_secret_end = .;'''
@@ -669,8 +677,11 @@ for sm in sms:
                '__sm_isr_func'   : '__sm_{}_isr_func'.format(sm),
                '__sm_nentries'   : nentries,
                '__sm_table'      : '__sm_{}_table'.format(sm),
-               '__sm_sp_addr'    : '__sm_{}_sp_addr'.format(sm),
+               '__sm_ssa_base_addr'    : '__sm_{}_ssa_base_addr'.format(sm),
+               '__sm_ssa_base'    : '__sm_{}_ssa_base'.format(sm),
+               '__sm_ssa_end'    : '__sm_{}_ssa_end'.format(sm),
                '__sm_sp'         : '__sm_{}_sp'.format(sm),
+               '__sm_pc'         : '__sm_{}_pc'.format(sm),
                '__sm_irq_sp'     : '__sm_{}_irq_sp'.format(sm),
                '__sm_tmp'        : '__sm_{}_tmp'.format(sm),
                '__ret_entry'     : '__sm_{}_ret_entry'.format(sm),
