@@ -5,7 +5,7 @@
 
 #include <stddef.h>
 
-#if __GNUC__ >= 5 || __clang_major__ >= 5
+#if 0 // __GNUC__ >= 5 || __clang_major__ >= 5
 
 #define __PS(name) sllvm_pm_##name##_text_start
 #define __PE(name) sllvm_pm_##name##_text_end

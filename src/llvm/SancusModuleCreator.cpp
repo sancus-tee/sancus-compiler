@@ -9,7 +9,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Module.h>
-#include <llvm/IR/TypeBuilder.h>
+// #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/CallSite.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/InlineAsm.h>
@@ -18,7 +18,7 @@
 #include <llvm/Support/Debug.h>
 
 #include <sstream>
-
+#include <utility>
 #include <iostream>
 
 using namespace llvm;
@@ -86,9 +86,9 @@ bool SancusModuleCreator::runOnModule(Module& m)
 {
     module = &m;
     LLVMContext& ctx = m.getContext();
-    wordTy = TypeBuilder<types::i<16>, true>::get(ctx);
-    byteTy = TypeBuilder<types::i<8>, true>::get(ctx);
-    voidPtrTy = TypeBuilder<types::i<8>*, true>::get(ctx);
+    wordTy = Type::getInt16Ty(ctx);
+    byteTy = Type::getInt8Ty(ctx);
+    voidPtrTy = Type::getInt8PtrTy(ctx);
     voidTy = Type::getVoidTy(ctx);
 
     Type* argTys[] = {voidPtrTy, voidPtrTy, voidPtrTy};
@@ -216,14 +216,14 @@ bool SancusModuleCreator::handleFunction(Function& f)
         auto asmFuncTy = FunctionType::get(voidTy, /*isVarArg=*/false);
         auto inlineAsm = InlineAsm::get(asmFuncTy, asmStr, constraintsStr,
                                     /*hasSideEffects=*/true);
-        
+
         // NOTE: the last instruction of the last basic block of an mmio (naked)
         // function is always the "unreachable" instruction. We therefore insert
         // our asm stub _before_ the last instruction.
         Instruction *last = &(f.back().back());
         assert(UnreachableInst::classof(last) &&
            "Inserting sm_asm_exit branch before non-unreachable instruction");
-        CallInst::Create(inlineAsm, /*nameStr=*/ "", /*insertBefore=*/ last); 
+        CallInst::Create(inlineAsm, /*nameStr=*/ "", /*insertBefore=*/ last);
 
         modified = true;
     }
@@ -474,7 +474,7 @@ SancusModuleInfo SancusModuleCreator::getSancusModuleInfo(const GlobalValue* gv)
                       << gv->getName().str() << "' is inconsistent with "
                       << "previous annotations (cannot use SM_{ENTRY,FUNC,DATA}"
                       << " for secure MMIO SMs).";
-                    
+
                     module->getContext().emitError(m.str());
                 }
                 sms_mmio[info.name] &= info.isMmio;

@@ -16,7 +16,7 @@ FunctionCcInfo::FunctionCcInfo(Function* f)
 
     unsigned argRegsLeft = 4;
 
-    for (Argument& arg : f->getArgumentList())
+    for (Argument& arg : f->args())
     {
         Type* argTy = arg.getType();
 

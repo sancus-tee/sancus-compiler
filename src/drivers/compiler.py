@@ -82,7 +82,7 @@ else:
     # Add each include argument
     for i in args.include:
         cc_args += ['-include', i]
-    
+
     call_prog('clang', cc_args)
 
     opt_bc = get_tmp('.bc')
@@ -92,7 +92,7 @@ else:
 
     assembly = get_tmp('.s')
     llc_opt = '-O' + ('2' if args.optimization == 's' else args.optimization)
-    llc_args = [llc_opt, '-msp430-hwmult-mode=no', '-o', assembly, opt_bc]
+    llc_args = [llc_opt, '-o', assembly, opt_bc]
     call_prog('llc', llc_args)
 
 as_args += ['-c', '-o', out_file, assembly]

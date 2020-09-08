@@ -27,5 +27,4 @@ else ()
     message(FATAL_ERROR "Only GCC and Clang are supported")
 endif ()
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -fno-rtti -std=c++11")
-
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -fno-rtti -std=c++17")
