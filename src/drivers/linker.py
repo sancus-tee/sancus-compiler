@@ -2,11 +2,19 @@
 
 import re
 import os
+from pathlib import Path
 import string
 from collections import defaultdict
 
 from elftools.elf.elffile import ELFFile
 from elftools.common.exceptions import ELFError
+
+from yaml import load, dump
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+from yaml import YAMLError
 
 import sancus.config
 import sancus.paths
@@ -181,6 +189,17 @@ parser.add_argument('--scan-libraries-for-sm',
                     'libraries that are given as a full path (-l:/path/to/file.a). '
                     'As such, it does not scan -lm style libraries unnecessarily.',
                     action='store_true')
+parser.add_argument('--sm-config-file',
+                    help='Use a config file for SMs to specify which asm stubs to use.'
+                        'This is useful if multiple SMs have different roles (e.g. Scheduler and '
+                        'normal modules. This is also useful if one wants to use different stubs '
+                        'than the ones provided by the scheduler. See sm-config-example.yaml for documentation.',
+                        type=Path)
+parser.add_argument('--project-path', type=Path, default=os.getcwd(),
+                    help='To allow some flexibility in sm-config-files, we allow the special parameter '
+                        '$PROJECT that is substituted for this Path in the linker. This allows projects '
+                        'to give the linker the correct path at compile time while still supporting a generic, '
+                        'project-dependent configuration file.')
 
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
@@ -505,6 +524,56 @@ else:
     info('No asm Sancus modules found')
 
 
+"""
+Now, we parse the YAML file if given.
+The YAML file allows to set two things:
+  1) warn whenever an ocall is performed and abort linking process
+  2) Swap out assembly stubs for custom project dependent values
+"""
+sm_config = {}
+if args.sm_config_file:
+    # load yaml
+    with open(args.sm_config_file, 'r') as stream:
+        yaml_config = stream.read()
+    
+    # Substitute $PATH in the yaml file for args.project_path
+    yaml_config = yaml_config.replace("$PROJECT", str(args.project_path))
+
+    # Substitute $SANCUS in the yaml for sancus datapath
+    yaml_config = yaml_config.replace("$SANCUS", sancus.paths.get_data_path())
+
+    # Parse to yaml into sm_config
+    try:
+        sm_config = load(yaml_config, Loader=Loader)
+    except YAMLError as exc:
+        info(exc)
+        fatal_error("Error occured during read yaml file.")
+    
+    # flatten dicts
+    for k,v in sm_config.items():
+        final_map = {}
+        for d in v:
+            final_map.update(d)
+        sm_config[k]=final_map
+
+# On debug output, print yaml config
+debug("YAML SM config:..")
+for k,v in sm_config.items():
+    debug("%s: %s" % (k, str(v)))
+debug("YAML config end.")
+
+# Warn if disallowed outcalls happened
+for k,v in sm_config.items():
+    if k in sms and 'disallow_outcalls' in v and v['disallow_outcalls']:
+            # Warn if there are outcalls
+            if len(sms_unprotected_calls[k]) > 0:
+                info("ERROR: %s has outcalls disallowed according to sm config file %s." % (k, args.sm_config_file))
+                info("However, %s has these outcalls:" % k)
+                info('  - SM calls: {}'.format(', '.join(sms_calls[k])))
+                fatal_error("Aborting since this constraint is violated.")
+            else:
+                info("Outcalls are disabled in %s and I encountered none." % k)
+
 if args.inline_arithmetic:
     # create sm_mul asm stub for each unique SM multiplication symbol
     sms_relocations = defaultdict(set)
@@ -706,13 +775,29 @@ for sm in sms:
         verify_file = rename_syms_sects(object, sym_map, sect_map)
         generated_object_files.append(verify_file)
 
-    entry_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_entry.o',
-                                   sym_map, sect_map)
+    entry_file_name = sancus.paths.get_data_path() + '/' + 'sm_entry.o'
     isr_file_name = 'sm_isr.o' if sm in sms_with_isr else 'sm_isr_dummy.o'
-    isr_file = rename_syms_sects(
-        sancus.paths.get_data_path() + '/' + isr_file_name, sym_map, sect_map)
-    exit_file = rename_syms_sects(sancus.paths.get_data_path() + '/sm_exit.o',
-                                  sym_map, sect_map)
+    isr_file_name = sancus.paths.get_data_path() + '/' + isr_file_name
+    exit_file_name = sancus.paths.get_data_path() + '/' + 'sm_exit.o'
+
+    # Get config for sm and see if there are options that overwrite the defaults:
+    if sm in sm_config:
+        if "sm_entry" in sm_config[sm] and len(sm_config[sm]["sm_entry"]) != 0:
+            entry_file_name = sm_config[sm]["sm_entry"]
+            info("%s: SM entry swapped out for %s" % (sm, entry_file_name))
+
+        if "sm_isr" in sm_config[sm] and len(sm_config[sm]["sm_isr"]) != 0:
+            isr_file_name = sm_config[sm]["sm_isr"]
+            info("%s: SM ISR swapped out for %s" % (sm, isr_file_name))
+
+        if "sm_exit" in sm_config[sm] and len(sm_config[sm]["sm_exit"]) != 0:
+            exit_file_name = sm_config[sm]["sm_exit"]
+            info("%s: SM exit swapped out for %s" % (sm, exit_file_name))
+
+    entry_file = rename_syms_sects(entry_file_name, sym_map, sect_map)
+    isr_file = rename_syms_sects(isr_file_name, sym_map, sect_map)
+    exit_file = rename_syms_sects(exit_file_name, sym_map, sect_map)
+
     generated_object_files += [entry_file, isr_file, exit_file]
 
     extra_labels = ['__isr_{} = .;'.format(n) for n in sms_irq_handlers[sm]]
@@ -816,12 +901,18 @@ for sm in mmio_sms:
                       for entry in sms_entries[sm]]
 
     verifyCaller = 'caller_id' in mmio_sms[sm]
-    entry_file = '/sm_mmio_exclusive.o' if verifyCaller else '/sm_mmio_entry.o'
-    entry_file = rename_syms_sects(sancus.paths.get_data_path() + entry_file,
-                                   sym_map, sect_map)
+    entry_file_name = '/sm_mmio_exclusive.o' if verifyCaller else '/sm_mmio_entry.o'
+    entry_file_name = sancus.paths.get_data_path() + entry_file_name
+
+    # Get config for sm and see if there are options that overwrite the defaults:
+    if sm in sm_config:
+        if "sm_mmio_entry" in sm_config[sm] and sm_config[sm].sm_mmio_entry.length != 0:
+            entry_file_name = sm_config[sm].sm_mmio_entry
+            info("%s: MMIO entry swapped out for %s" % (sm, entry_file_name))
+
+    entry_file = rename_syms_sects(entry_file_name, sym_map, sect_map)
     args.in_files += entry_file
-    text_sections.append(mmio_text_section.format(sm, entry_file,
-                                                     '\n    '.join(tables)))
+    text_sections.append(mmio_text_section.format(sm, entry_file, '\n    '.join(tables)))
 
     # create symbol table with values known at link time
     m = mmio_sms[sm]

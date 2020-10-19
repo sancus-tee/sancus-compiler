@@ -63,6 +63,11 @@ __reti_entry:
     ; restore sp and clear memory pointer
     mov &__sm_sp, r1
     mov #0, &__sm_sp
+    
+    ; === safe to handle IRQs now ===
+    ; If we allow interrupts before, the IRQ routine
+    ; could overwrite our stored registers
+    eint
 
     ; branch to pc (r2 already restored manually above)
     br &__sm_pc

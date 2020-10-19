@@ -17,7 +17,7 @@ __sm_entry:
 
     ; initialize SSA on first entry (if ssa_thread_id is 0x0)
     ; Use r1 for this check as we just backed it up
-    mov #__sm_ssa_base_addr, r1
+    mov &__sm_ssa_base_addr, r1
     cmp #0x0, r1
     jne 1f
     ; If SSA address was not initialized, do it now
@@ -34,18 +34,7 @@ __sm_entry:
     mov #__sm_stack_init, r1
 
 1:
-    ; check if this is a return from a interrupt
-    bit #0x1, &__sm_sp
-
-    ; === safe to handle IRQs now ===
-    eint
-
-    jz 1f
-    ; restore execution state if the sm was resumed
-    br #__reti_entry ; defined in exit.s
-
-1:
-    ; check of this is an IRQ
+    ; check if this is an IRQ
     push r15
     ; sancus_get_caller_id()
     .word 0x1387
@@ -65,9 +54,20 @@ __sm_entry:
     ; If we just do je __sm_isr we get a PCREL relocation which our runtime
     ; linker doesn't understand yet.
     br #__sm_isr
-1:
-    pop r15
 
+1:
+    ; Pop r15 again from the stack (we don't need the caller_id anymore)
+    pop r15
+    ; check if this is a return from a interrupt
+    bit #0x1, &__sm_sp
+
+    jz 1f
+    ; restore execution state if the sm was resumed
+    br #__reti_entry ; defined in exit.s
+
+1:
+    ; === safe to handle IRQs now ===
+    eint
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
