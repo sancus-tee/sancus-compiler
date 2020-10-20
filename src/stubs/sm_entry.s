@@ -15,18 +15,17 @@ __sm_entry:
     ; stack pointer.
     mov r1, &__sm_tmp
 
-    ; initialize SSA on first entry (if ssa_thread_id is 0x0)
-    ; Use r1 for this check as we just backed it up
-    mov &__sm_ssa_base_addr, r1
-    cmp #0x0, r1
-    jne 1f
-    ; If SSA address was not initialized, do it now
+    ; initialize SSA frame address for IRQ logic
     ; Technically, this could be set to any SSA but we have just one for now
     mov #__sm_ssa_base, &__sm_ssa_base_addr
     
-1:  
-    ; Now switch the stack to the ssa base
-    ; __sm_sp is our stackpointer, it lies at #ssa_base-2
+    ; Our stack pointer is either at __sm_ssa_sp or __sm_sp, depending
+    ; on whether we got interrupted last time or not. Pick __sm_sp only if 
+    ; __sm_ssa_sp is empty.
+    mov &__sm_ssa_sp, r1
+    cmp #0, r1
+    jne 1f
+    ; ssa_sp is empty -> __sm_sp is our stackpointer, it lies at #ssa_base-2
     mov &__sm_sp, r1
     ; initialize sp on first entry
     cmp #0x0, r1
@@ -56,10 +55,17 @@ __sm_entry:
     br #__sm_isr
 
 1:
+    ; We are not called by an IRQ. If __sm_ssa_caller_id is not set, fill it with the caller id
+    mov #__sm_ssa_caller_id, r15
+    cmp #0x0, r15
+    jne 1f
+    mov r15, &__sm_ssa_caller_id
+
+1:
     ; Pop r15 again from the stack (we don't need the caller_id anymore)
     pop r15
     ; check if this is a return from a interrupt
-    bit #0x1, &__sm_sp
+    bit #0x1, &__sm_ssa_sp
 
     jz 1f
     ; restore execution state if the sm was resumed
@@ -124,6 +130,7 @@ __sm_entry:
 
 1:
     mov #0xffff, r6
+    mov #0, &__sm_ssa_caller_id
     mov #0, &__sm_sp
     br r7
 

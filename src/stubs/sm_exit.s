@@ -61,8 +61,8 @@ __reti_entry:
     pop r2
 
     ; restore sp and clear memory pointer
-    mov &__sm_sp, r1
-    mov #0, &__sm_sp
+    mov &__sm_ssa_sp, r1
+    mov #0, &__sm_ssa_sp
     
     ; === safe to handle IRQs now ===
     ; If we allow interrupts before, the IRQ routine
