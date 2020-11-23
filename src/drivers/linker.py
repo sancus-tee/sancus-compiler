@@ -753,15 +753,19 @@ for sm in sms:
                '__sm_ssa_base_addr'    : '__sm_{}_ssa_base_addr'.format(sm),
                '__sm_ssa_base'    : '__sm_{}_ssa_base'.format(sm),
                '__sm_ssa_end'    : '__sm_{}_ssa_end'.format(sm),
+               '__sm_ssa_sp'     : '__sm_{}_ssa_sp'.format(sm),
                '__sm_sp'         : '__sm_{}_sp'.format(sm),
                '__sm_pc'         : '__sm_{}_pc'.format(sm),
+               '__sm_ssa_thread_id'     : '__sm_{}_ssa_thread_id'.format(sm),
+               '__sm_ssa_caller_id'     : '__sm_{}_ssa_caller_id'.format(sm),
                '__sm_irq_sp'     : '__sm_{}_irq_sp'.format(sm),
                '__sm_tmp'        : '__sm_{}_tmp'.format(sm),
                '__ret_entry'     : '__sm_{}_ret_entry'.format(sm),
                '__reti_entry'    : '__sm_{}_reti_entry'.format(sm),
                '__sm_exit'       : '__sm_{}_exit'.format(sm),
                '__sm_stack_init' : '__sm_{}_stack_init'.format(sm),
-               '__sm_verify'     : '__sm_{}_verify'.format(sm)}
+               '__sm_verify'     : '__sm_{}_verify'.format(sm)
+               }
     sect_map = {'.sm.text' : '.sm.{}.text'.format(sm)}
 
     tables = []
