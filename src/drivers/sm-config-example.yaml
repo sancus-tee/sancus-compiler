@@ -19,7 +19,10 @@ my_sm_1:
     # Here we use the default (empty string|not defined -> default)
     # This line could also be omitted to revert to the default.
     - sm_mmio_entry: ""
-
+    # One SM is allowed to support a peripheral offset of a given 
+    # amount of byte. This allows to map the data section over the
+    # peripherals to grant exclusive and faster access to these peripherals
+    - peripheral_offset: 159
 my_sm_2:
  	- disallow_outcalls: True
     
