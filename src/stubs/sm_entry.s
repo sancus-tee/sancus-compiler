@@ -7,7 +7,16 @@
     ; r7: return address
 __sm_entry:
     ; === need a secure stack to handle IRQs ===
-    dint
+    ; dint
+    ; First remove ssa base addr to notify violation handler to not use this SMs violation pointer
+    mov #0, &__sm_ssa_base_addr
+    ; back up r15
+    mov r15, &__sm_tmp
+    ; set up clix length and call clix (word 0x1389)
+    mov #10, r15 
+    .word 0x1389
+    ; restore r15
+    mov &__sm_tmp, r15
 
     ; If we are here because of an IRQ, we will need the current SP later. We do
     ; do not store it in its final destination yet (__sm_irq_sp) because we may
@@ -59,6 +68,7 @@ __sm_entry:
     mov #__sm_ssa_caller_id, r15
     cmp #0x0, r15
     jne 1f
+    .word 0x1387
     mov r15, &__sm_ssa_caller_id
 
 1:
