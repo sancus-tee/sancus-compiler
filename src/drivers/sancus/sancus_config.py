@@ -54,9 +54,10 @@ class SmConfigParser:
             # flatten dicts
             for k,v in sm_config_dict.items():
                 final_map = {}
-                for d in v:
-                    final_map.update(d)
-                sm_config_dict[k]=final_map
+                if v is not None:
+                    for d in v:
+                        final_map.update(d)
+                    sm_config_dict[k]=final_map
 
         # Build final sm config dict with name : SmConfig mapping
         self._sm_config = {}
@@ -104,7 +105,7 @@ class SmConfig:
     """
     def __init__ (self, sm_name, config_dict):
         self._name = sm_name
-        self._config_dict = config_dict
+        self._config_dict = config_dict if config_dict is not None else {}
 
         """
         Internal init function to safely parse a key from the config dict
