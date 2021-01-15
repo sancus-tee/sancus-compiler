@@ -83,9 +83,9 @@ SECTIONS
   .bss   :
   {
      PROVIDE (__bss_start = .) ;
+     $sm_data_sections
      __unprotected_sp = .;
      . += 2;
-     $sm_data_sections
     *(.bss .bss.*)
     *(COMMON)
      . = ALIGN(2);
