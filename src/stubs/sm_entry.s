@@ -13,7 +13,7 @@ __sm_entry:
     ; back up r15
     mov r15, &__sm_tmp
     ; set up clix length and call clix (word 0x1389)
-    mov #10, r15 
+    mov #100, r15 
     .word 0x1389
     ; restore r15
     mov &__sm_tmp, r15
