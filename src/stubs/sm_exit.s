@@ -58,6 +58,10 @@ __reti_entry:
     pop r13
     pop r14
     pop r15
+    ; we want to pop r2 but want to clear the GIE bit first
+    ; otherwise we may be interrupted on the next two instructions which 
+    ; could overwrite our SSA_SP and SSA_PC
+    bic #8, 0(r1)
     pop r2
 
     ; restore sp and clear memory pointer
