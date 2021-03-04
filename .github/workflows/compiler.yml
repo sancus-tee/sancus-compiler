@@ -1,0 +1,28 @@
+name: Compiler build
+
+on:
+  # Run on pushes to master
+  push:
+    branches:
+      - master
+  # Run on pull requests (automatically uses PR in repo checkout)
+  pull_request:
+  # Also run on a schedule (once a month)
+  schedule:
+    - cron: '0 0 1 */1 *'
+    
+jobs:
+  push:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, ubuntu-20.04, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build compiler
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+          make install
