@@ -63,7 +63,7 @@ def add_sym(file, sym_map):
 
     args += [file, file]
     call_prog('msp430-elf-objcopy', args)
-    return file 
+    return file
 
 
 def parse_size(val):
@@ -92,16 +92,17 @@ def get_symbol(elf_file, name):
 
 def get_io_sym_map(sm_name):
     sym_map = {
-        '__sm_handle_input':    '__sm_{}_handle_input'.format(sm_name),
-        '__sm_num_inputs':      '__sm_{}_num_inputs'.format(sm_name),
-        '__sm_num_connections': '__sm_{}_num_connections'.format(sm_name),
-        '__sm_io_keys':         '__sm_{}_io_keys'.format(sm_name),
-        '__sm_input_callbacks': '__sm_{}_input_callbacks'.format(sm_name),
-        '__sm_output_nonce':    '__sm_{}_output_nonce'.format(sm_name),
-        '__sm_send_output':     '__sm_{}_send_output'.format(sm_name),
-        '__sm_set_key':         '__sm_{}_set_key'.format(sm_name),
-        '__sm_X_exit':          '__sm_{}_exit'.format(sm_name),
-        '__sm_X_stub_malloc':   '__sm_{}_stub_malloc'.format(sm_name),
+        '__sm_handle_input':        '__sm_{}_handle_input'.format(sm_name),
+        '__sm_num_inputs':          '__sm_{}_num_inputs'.format(sm_name),
+        '__sm_num_connections':     '__sm_{}_num_connections'.format(sm_name),
+        '__sm_max_connections':     '__sm_{}_max_connections'.format(sm_name),
+        '__sm_io_connections':      '__sm_{}_io_connections'.format(sm_name),
+        '__sm_input_callbacks':     '__sm_{}_input_callbacks'.format(sm_name),
+        '__sm_send_output':         '__sm_{}_send_output'.format(sm_name),
+        '__sm_set_key':             '__sm_{}_set_key'.format(sm_name),
+        '__sm_attest':              '__sm_{}_attest'.format(sm_name),
+        '__sm_X_exit':              '__sm_{}_exit'.format(sm_name),
+        '__sm_X_stub_malloc':       '__sm_{}_stub_malloc'.format(sm_name),
         '__sm_X_stub_reactive_handle_output':
             '__sm_{}_stub_reactive_handle_output'.format(sm_name)
     }
@@ -115,7 +116,7 @@ def get_io_sect_map(sm_name):
         '.rela.sm.X.text':  '.rela.sm.{}.text'.format(sm_name),
     }
 
-    for entry in ('__sm{}_set_key', '__sm{}_handle_input'):
+    for entry in ('__sm{}_set_key', '__sm{}_attest', '__sm{}_handle_input'):
         map['.sm.X.{}.table'.format(entry.format(''))] = \
             '.sm.{}.{}.table'.format(sm_name, entry.format('_' + sm_name))
         map['.rela.sm.X.{}.table'.format(entry.format(''))] = \
@@ -136,15 +137,19 @@ def create_io_stub(sm, stub):
 
 
 def sort_entries(entries):
-    # If the set_key entry exists, it should have index 0 and if the
-    # handle_input entry exists, it should have index 1. This is accomplished by
-    # mapping those entries to __ and ___ respectively since those come
+    # If the set_key entry exists, it should have index 0, if the
+    # attest entry exists, it should have index 1 and if
+    # handle_input entry exists, it should have index 2. This is accomplished by
+    # mapping those entries to __, ___ and ___ respectively since those come
     # alphabetically before any valid entry name.
     def sort_key(entry):
         if re.match(r'__sm_\w+_set_key', entry.name):
             return '__'
-        if re.match(r'__sm_\w+_handle_input', entry.name):
+        if re.match(r'__sm_\w+_attest', entry.name):
             return '___'
+        if re.match(r'__sm_\w+_handle_input', entry.name):
+            return '____'
+
         return entry.name
 
     entries.sort(key=sort_key)
@@ -194,6 +199,12 @@ parser.add_argument('--project-path', type=Path, default=os.getcwd(),
                         '$PROJECT that is substituted for this Path in the linker. This allows projects '
                         'to give the linker the correct path at compile time while still supporting a generic, '
                         'project-dependent configuration file.')
+parser.add_argument('--num-connections',
+                    help='Parameter for Authentic Execution. Maximum number of '
+                    'connections that the module can have. '
+                    'This number impacts on the size of the module.',
+                    type=int,
+                    default=0)
 
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
@@ -212,7 +223,7 @@ if args.scan_libraries_for_sm:
     for a in archive_files:
         debug("Unpacking archive for Sancus SM inspection: " + a)
         file_name = a
-        if ':' in a: 
+        if ':' in a:
             # support calls such as -lib:/full/path
             file_name = file_name.split(':')[1]
 
@@ -269,6 +280,7 @@ existing_macs = []
 elf_relocations = defaultdict(list)
 
 added_set_key_stub = False
+added_attest_stub = False
 added_input_stub = False
 added_output_stub = False
 
@@ -409,6 +421,14 @@ while i < len(input_files_to_scan):
                         input_files_to_scan.append(generated_file)
                         added_set_key_stub = True
 
+                    if not added_attest_stub:
+                        # Generate the attest stub file
+                        generated_file = create_io_stub(sm, 'sm_attest.o')
+                        generated_object_files.append(generated_file)
+                        # And register it to also be scanned by this loop later
+                        input_files_to_scan.append(generated_file)
+                        added_attest_stub = True
+
                     if which == 'input':
                         dest = sms_inputs
 
@@ -463,7 +483,7 @@ Now, we parse the YAML file if given.
 The YAML file allows to set the following things:
   1) warn whenever an ocall is performed and abort linking process
   2) Swap out assembly stubs for custom project dependent values
-  3) Set a peripheral offset for the first SM to 
+  3) Set a peripheral offset for the first SM to
 """
 try:
     file_path = ''
@@ -832,21 +852,17 @@ for sm in sms:
         input_callbacks += '    KEEP({}(.sm.{}.callbacks))\n'.format(o_file, sm)
         input_callbacks += '    . = ALIGN(2);'
 
-    # Table of connection keys
-    io_keys = ''
+    # Table of connections
+    num_connections = ''
+    io_connections = ''
 
     if len(ios) > 0:
-        io_keys += '__sm_{}_io_keys = .;\n'.format(sm)
-        io_keys += '    . += {};\n'.format(len(ios) * KEY_SIZE)
-        io_keys += '    . = ALIGN(2);'
-
-    # Nonce used by outputs
-    outputs_nonce = ''
-
-    if len(outputs) > 0:
-        outputs_nonce += '__sm_{}_output_nonce = .;\n'.format(sm)
-        outputs_nonce += '    . += 2;\n'
-        outputs_nonce += '    . = ALIGN(2);'
+        num_connections += '__sm_{}_num_connections = .;\n'.format(sm)
+        num_connections += '    . += 2;\n'
+        num_connections += '    . = ALIGN(2);'
+        io_connections += '__sm_{}_io_connections = .;\n'.format(sm)
+        io_connections += '    . += {};\n'.format(args.num_connections * (6 + KEY_SIZE))
+        io_connections += '    . = ALIGN(2);'
 
     # Set data section offset if peripheral access is set
     # in that case, optionally provide first SM with exclusive access to last peripheral
@@ -859,10 +875,10 @@ for sm in sms:
                                              exit_file, '\n    '.join(tables),
                                              input_callbacks,
                                              '\n    '.join(extra_labels)))
-    
+
     data_sections.append(data_section.format(sm, '\n    '.join(id_syms),
-                                             args.sm_stack_size, io_keys,
-                                             outputs_nonce,
+                                             args.sm_stack_size, num_connections,
+                                             io_connections,
                                              data_section_start))
 
     if sm in sms_entries:
@@ -880,7 +896,7 @@ for sm in sms:
         symbols.append('__sm_{}_io_{}_idx = {};'.format(sm, io, index))
 
     # Add symbols for the number of connections/inputs
-    symbols.append('__sm_{}_num_connections = {};'.format(sm, len(ios)))
+    symbols.append('__sm_{}_max_connections = {};'.format(sm, args.num_connections))
     symbols.append('__sm_{}_num_inputs = {};'.format(sm, len(inputs)))
 
     if args.prepare_for_sm_text_section_wrapping:

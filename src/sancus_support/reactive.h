@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 typedef uint16_t io_index;
+typedef uint16_t conn_index;
 typedef uint8_t  io_data __attribute__((aligned(2)));
 
 // The ASM symbols are used for the linker to be able to detect inputs/outputs
