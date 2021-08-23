@@ -829,7 +829,7 @@ for sm in sms:
 
         call_prog('msp430-gcc', ['-c', '-o', o_file, c_file])
 
-        input_callbacks += '    {}(.sm.{}.callbacks)\n'.format(o_file, sm)
+        input_callbacks += '    KEEP({}(.sm.{}.callbacks))\n'.format(o_file, sm)
         input_callbacks += '    . = ALIGN(2);'
 
     # Table of connection keys
