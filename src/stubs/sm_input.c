@@ -3,22 +3,13 @@
 #include <alloca.h>
 #include <stdlib.h>
 
-void SM_ENTRY(SM_NAME) __sm_handle_input(conn_index conn_id,
+void SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
                                          const void* payload, size_t len)
 {
-    // search for the connection.
-    // Unfortunately, this operation is O(n) with n = number of connections
-    int i;
-    Connection *conn = NULL;
-    for (i=0; i<__sm_num_connections; i++) {
-      conn = &__sm_io_connections[i];
+    if(conn_idx >= __sm_num_connections)
+      return; // bad ID given by caller
 
-      if(conn->conn_id == conn_id)
-        break;
-    }
-
-    if (i == __sm_num_connections)
-      return; // connection not found
+    Connection *conn = &__sm_io_connections[conn_idx];
 
     if (conn->io_id >= SM_NUM_INPUTS)
       return;
