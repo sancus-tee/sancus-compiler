@@ -23,6 +23,14 @@ typedef struct Connection {
     IoKey       key;
 } Connection;
 
+// The size of the Connection struct is also hardcoded in linker.py. Hence,
+// we need to make sure that it does not change at compile time (e.g. due to
+// optimizations).
+// Besides, if the struct changes, we need to adjust this value here and in
+// linker.py (check the CONNECTION_STRUCT_SIZE global variable) as well.
+_Static_assert (sizeof(Connection) == 6 + SANCUS_KEY_SIZE,
+    "Size of Connection struct differs from the expected value");
+
 // These will be allocated by the linker
 extern Connection __sm_io_connections[];
 extern InputCallback __sm_input_callbacks[];

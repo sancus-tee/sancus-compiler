@@ -17,6 +17,7 @@ from common import *
 
 MAC_SIZE = int(sancus.config.SECURITY / 8)
 KEY_SIZE = MAC_SIZE
+CONNECTION_STRUCT_SIZE = 6 + KEY_SIZE
 
 
 class SmEntry:
@@ -861,7 +862,7 @@ for sm in sms:
         num_connections += '    . += 2;\n'
         num_connections += '    . = ALIGN(2);'
         io_connections += '__sm_{}_io_connections = .;\n'.format(sm)
-        io_connections += '    . += {};\n'.format(args.num_connections * (6 + KEY_SIZE))
+        io_connections += '    . += {};\n'.format(args.num_connections * CONNECTION_STRUCT_SIZE)
         io_connections += '    . = ALIGN(2);'
 
     # Set data section offset if peripheral access is set
