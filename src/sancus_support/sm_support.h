@@ -199,15 +199,12 @@ extern char __unprotected_sp;
 
 #endif
 
-#define __OUTSIDE_SM( p, sm )                                                  \
-    ( ((void*) p < (void*) &__PS(sm)) || ((void*) p >= (void*) &__PE(sm)) ) && \
-    ( ((void*) p < (void*) &__SS(sm)) || ((void*) p >= (void*) &__SE(sm)) )
-
 /*
  * Returns true iff whole buffer [p,p+len-1] is outside of the sm SancusModule
  */
-#define sancus_is_outside_sm( sm, p, len) \
-    ( __OUTSIDE_SM(p, sm) && __OUTSIDE_SM((p+len-1), sm) )
+#define sancus_is_outside_sm(sm, p, len) \
+    ( is_buffer_outside_region(&__PS(sm), &__PE(sm), p, len) && \
+      is_buffer_outside_region(&__SS(sm), &__SE(sm), p, len) )
 
 /**
  * Interrupt vector for the Sancus violation ISR.
@@ -310,6 +307,33 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 
 #undef always_inline
 #define always_inline static inline __attribute__((always_inline))
+
+/*
+ * Returns true if buf is outside the memory region [start, end)
+ * if start >= end, immediately return false
+ */
+always_inline int is_buffer_outside_region(void *start, void *end,
+    void *buf, size_t len) {
+  void *buf_end;
+
+  // make sure start < end, otherwise return false
+  if (start >= end) {
+    return 0;
+  }
+
+  if(len > 0) {
+    buf_end = buf + len - 1;
+  }
+  else {
+    buf_end = buf;
+  }
+
+  if( (end <= buf) || (start > buf_end) ) {
+    return 1;
+  }
+
+  return 0;
+}
 
 /**
  * Performs constant time comparison between to buffers
