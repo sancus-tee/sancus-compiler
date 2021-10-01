@@ -105,7 +105,11 @@ def get_io_sym_map(sm_name):
         '__sm_X_exit':              '__sm_{}_exit'.format(sm_name),
         '__sm_X_stub_malloc':       '__sm_{}_stub_malloc'.format(sm_name),
         '__sm_X_stub_reactive_handle_output':
-            '__sm_{}_stub_reactive_handle_output'.format(sm_name)
+            '__sm_{}_stub_reactive_handle_output'.format(sm_name),
+        '__sm_X_public_start':      '__sm_{}_public_start'.format(sm_name),
+        '__sm_X_public_end':        '__sm_{}_public_end'.format(sm_name),
+        '__sm_X_secret_start':      '__sm_{}_secret_start'.format(sm_name),
+        '__sm_X_secret_end':        '__sm_{}_secret_end'.format(sm_name)
     }
 
     return sym_map
