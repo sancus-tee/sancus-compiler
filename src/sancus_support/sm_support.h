@@ -399,19 +399,18 @@ always_inline sm_id sancus_verify(const void* expected_tag,
  * for the definition of the calling module.
  *
  * @return True iff the verification succeeded.
+ *
+ * NOTE: This function is deprecated as it is not interrupt-safe and can be
+ * easily implemented using other primitives as follows:
+ *
+ *      sancus_verify_caller(tag) = sancus_verify(tag, caller_adrs) &&
+ *          (sancus_get_id(caller_adrs) == sancus_get_caller_id())
+ *
+ * where the alleged caller_adrs can be passed by an untrusted caller (as is
+ * already done in the sm_entry.S enclave runtime, where it can optionally be
+ * retrieved transparently)
  */
-always_inline int sancus_verify_caller(const void* expected_tag)
-{
-    int ret;
-    asm("mov %1, r15\n\t"
-        "1: .word 0x1383\n\t"
-        "jz 1b\n\t" /* restart on IRQ */
-        "mov r15, %0"
-        : "=m"(ret)
-        : "r"(expected_tag)
-        : "15");
-    return ret;
-}
+//always_inline int sancus_verify_caller(const void* expected_tag)
 
 /**
  * Wrap a message using the Sancus authenticated encryption features.
