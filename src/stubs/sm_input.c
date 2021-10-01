@@ -6,6 +6,10 @@
 void SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
                                          const void* payload, size_t len)
 {
+    if( !sancus_is_outside_sm(SM_NAME, (void *) payload, len)) {
+      return;
+    }
+
     if(conn_idx >= __sm_num_connections)
       return; // bad ID given by caller
 
