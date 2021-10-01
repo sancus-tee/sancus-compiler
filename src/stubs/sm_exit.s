@@ -72,6 +72,7 @@ __reti_entry:
     ; If we allow interrupts before, the IRQ routine
     ; could overwrite our stored registers
     eint
+    ; ========================= Aion CLIX length ENDS here =========================
 
     ; branch to pc (r2 already restored manually above)
     br &__sm_pc

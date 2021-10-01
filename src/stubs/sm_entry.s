@@ -6,16 +6,17 @@
     ; r6: ID of entry point to be called, 0xffff if returning
     ; r7: return address
 __sm_entry:
-    ; === need a secure stack to handle IRQs ===
-    ; dint
+    ; On entry, disable interrupts. This will not work (NOP) with Aion but will work with default Sancus.
+    dint
     ; First remove ssa base addr to notify violation handler to not use this SMs violation pointer
     mov #0, &__sm_ssa_base_addr
-    ; back up r15
+    ; Back up r15 to use it for clix
     mov r15, &__sm_tmp
-    ; set up clix length and call clix (word 0x1389)
+    ; In Aion mode, the dint above did nothing. In that case, set up clix length and call clix (word 0x1389)
     mov #100, r15 
     .word 0x1389
-    ; restore r15
+    ; ========================= Aion CLIX length STARTS here =========================
+    ; Restore r15
     mov &__sm_tmp, r15
 
     ; If we are here because of an IRQ, we will need the current SP later. We do
@@ -24,7 +25,7 @@ __sm_entry:
     ; stack pointer.
     mov r1, &__sm_tmp
 
-    ; initialize SSA frame address for IRQ logic
+    ; Initialize SSA frame address for IRQ logic
     ; Technically, this could be set to any SSA but we have just one for now
     mov #__sm_ssa_base, &__sm_ssa_base_addr
     
@@ -84,6 +85,7 @@ __sm_entry:
 1:
     ; === safe to handle IRQs now ===
     eint
+    ; ========================= Aion CLIX length ENDS here =========================
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
