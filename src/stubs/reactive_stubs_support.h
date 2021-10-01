@@ -46,7 +46,6 @@ extern char __sm_num_inputs;
 #define SM_NAME X
 
 // declare symbols for the public/secret regions
-extern void *__sm_X_public_start, *__sm_X_public_end,
-            *__sm_X_secret_start, *__sm_X_secret_end;
+extern char __PS(SM_NAME), __PE(SM_NAME), __SS(SM_NAME), __SE(SM_NAME);
 
 #endif
