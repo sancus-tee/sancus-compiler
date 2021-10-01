@@ -65,14 +65,16 @@ __sm_entry:
     br #__sm_isr
 
 1:
-    ; We are not called by an IRQ. If __sm_ssa_caller_id is not set, fill it with the caller id
-    mov #__sm_ssa_caller_id, r15
-    cmp #0x0, r15
-    jne 1f
+    ; We are not called by an IRQ. Fill __sm_ssa_caller_id on ecall and on ocall return.
+    tst &__sm_ssa_caller_id
+    jeq 1f
+    cmp #0xffff, r6
+    jne 2f
+1:
     .word 0x1387
     mov r15, &__sm_ssa_caller_id
 
-1:
+2:
     ; Pop r15 again from the stack (we don't need the caller_id anymore)
     pop r15
     ; check if this is a return from a interrupt
