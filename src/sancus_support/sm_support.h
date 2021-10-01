@@ -312,7 +312,13 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 #define always_inline static inline __attribute__((always_inline))
 
 /**
- * Disable the protection of the calling module.
+ * DANGEROUS: Disable the protection of the calling module.
+ * NOTE: When utilizing Aion with availability guarantees, this can be very dangerous. 
+ * If this SM is being called by another one, the other SM may be interrupted between
+ * the sm_verify check and the actual call into the function. If sancus_disable is 
+ * executed in this window, an attacker could fully control the SM call and the return to
+ * the other SM.
+ * Thus, be very careful with disabling an SM if other SMs rely on it to be calleable.
  */
 always_inline void sancus_disable(void *continuation)
 {
@@ -579,6 +585,20 @@ always_inline sm_id sancus_get_caller_id(void)
         : "15");
     return ret;
 }
+
+// always_inline sm_id sancus_get_original_caller_id(struct SancusModule* sm)
+// {
+//     sm_id ret;
+//     asm("mov %1 r15\n\t"
+//         "mov r15 %0"
+//         : "=m"(ret)
+//         // secret_end - 2 is ssa_base_addr that points to ssa_base. 
+//         // We want sm_caller_id that lies at ssa_base + 4
+//         : "m"(*( (void **)(sm->secret_end - 2)) + 4)
+//         : "15"
+//     );
+//     return ret;
+// }
 
 /**
  * Perform a call to a Sancus module.
