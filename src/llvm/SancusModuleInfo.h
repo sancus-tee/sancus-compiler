@@ -17,6 +17,7 @@ struct SancusModuleInfo
     std::string getSpName() const;
     std::string getEntryName() const;
     std::string getExitName() const;
+    std::string getCallerID() const;
     std::string getVerifyName() const;
     std::string getIndexName(const std::string& entry) const;
     std::string getCalleeIdName(const std::string& callee) const;

@@ -38,6 +38,11 @@ std::string SancusModuleInfo::getExitName() const
     return "__sm_" + name + "_exit";
 }
 
+std::string SancusModuleInfo::getCallerID() const
+{
+    return "__sm_" + name + "_ssa_caller_id";
+}
+
 std::string SancusModuleInfo::getVerifyName() const
 {
     return "__sm_" + name + "_verify";

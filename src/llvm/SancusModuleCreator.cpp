@@ -47,6 +47,7 @@ struct SancusModuleCreator : ModulePass
     Constant* getSymbolAddress(Module& m, StringRef name);
     std::string fixSymbolName(const std::string& name);
     CallSite handleSancusCall(CallSite cs);
+    CallSite handleSancusGetCallerId(CallSite cs);
 
     typedef std::map<const GlobalValue*, SancusModuleInfo> InfoMap;
     InfoMap modulesInfo;
@@ -180,6 +181,12 @@ bool SancusModuleCreator::handleFunction(Function& f)
         {
             replacements[cs.getInstruction()] =
                 handleSancusCall(cs).getInstruction();
+            continue;
+        }
+        else if (callee->getName() == "sancus_get_caller_id")
+        {
+            replacements[cs.getInstruction()] =
+                handleSancusGetCallerId(cs).getInstruction();
             continue;
         }
 
@@ -637,5 +644,33 @@ CallSite SancusModuleCreator::handleSancusCall(CallSite cs)
                                     /*hasSideEffects=*/true);
 
     auto asmCall = CallInst::Create(inlineAsm, args);
+    return CallSite(asmCall);
+}
+
+CallSite SancusModuleCreator::handleSancusGetCallerId(CallSite cs)
+{
+    auto callerInfo = getSancusModuleInfo(cs.getCaller());
+
+    std::string asmStr;
+
+    if (callerInfo.isInSm){
+        asmStr = Twine("mov &" + callerInfo.getCallerID() + ", $0\n\t"
+                      ).str();
+    } else {
+        asmStr = Twine( ".word 0x1387\n\t"
+                        "mov r15, $0\n\t"
+                      ).str();
+    }
+
+    /* callerID is stored in SSA */
+    auto constraintsStr = "=r,~{r15}";
+    auto asmFuncTy = FunctionType::get(wordTy, /*isVarArg=*/false);
+
+    // NOTE hasSideEffects has to be true because the inline assembly may be
+    // optimised away otherwise
+    auto inlineAsm = InlineAsm::get(asmFuncTy, asmStr, constraintsStr,
+                                    /*hasSideEffects=*/true);
+
+    auto asmCall = CallInst::Create(inlineAsm);
     return CallSite(asmCall);
 }

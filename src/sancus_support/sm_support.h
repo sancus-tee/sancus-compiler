@@ -582,32 +582,11 @@ always_inline sm_id sancus_get_self_id(void)
  *
  * The calling module is defined as the previously executing module. That is,
  * the module that entered the currently executing module.
- */
-always_inline sm_id sancus_get_caller_id(void)
-{
-    sm_id ret;
-    asm(".word 0x1387\n\t"
-        "jz .\n\t" /* should never fail */
-        "mov r15, %0"
-        : "=m"(ret)
-        :
-        : "15");
-    return ret;
-}
-
-// always_inline sm_id sancus_get_original_caller_id(struct SancusModule* sm)
-// {
-//     sm_id ret;
-//     asm("mov %1 r15\n\t"
-//         "mov r15 %0"
-//         : "=m"(ret)
-//         // secret_end - 2 is ssa_base_addr that points to ssa_base. 
-//         // We want sm_caller_id that lies at ssa_base + 4
-//         : "m"(*( (void **)(sm->secret_end - 2)) + 4)
-//         : "15"
-//     );
-//     return ret;
-// }
+ *
+ * @note This function is implemented as a compiler intrinsic to 
+ * be able to read it from the SM's SSA frame.
+  */
+sm_id sancus_get_caller_id(void);
 
 /**
  * Perform a call to a Sancus module.
