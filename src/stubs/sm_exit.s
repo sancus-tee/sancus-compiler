@@ -81,14 +81,6 @@ __reti_entry:
     .global __ret_entry
     .type __ret_entry,@function
 __ret_entry:
-    ; If we return from an OCALL, overwrite the stored caller_id
-    ; Backup R15 and call sancus_get_caller_id()
-    push r15
-    .word 0x1387
-    ; Move caller id into ssa_caller_id and restore r15
-    mov r15, &__sm_ssa_caller_id
-    pop r15
-
     ; restore callee-save registers
     pop r11
     pop r10
