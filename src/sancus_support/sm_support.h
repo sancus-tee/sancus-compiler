@@ -313,12 +313,21 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 
 /**
  * DANGEROUS: Disable the protection of the calling module.
- * NOTE: When utilizing Aion with availability guarantees, this can be very dangerous. 
- * If this SM is being called by another one, the other SM may be interrupted between
- * the sm_verify check and the actual call into the function. If sancus_disable is 
- * executed in this window, an attacker could fully control the SM call and the return to
- * the other SM.
- * Thus, be very careful with disabling an SM if other SMs rely on it to be calleable.
+ *
+ * NOTE: On Sancus cores that support interruptible enclaves, the
+ * compiler/runtime does _not_ transparently take care of atomicity concerns
+ * when disabling enclaves, i.e., secure linking is currently not meant to be
+ * interrupt-safe. If this SM is being called by another one, the other SM may
+ * be interrupted between the sm_verify check and the actual call into the
+ * function. If sancus_disable is executed in this window, an attacker could
+ * fully control the SM call and the return to the other SM.
+
+ * Thus, for callee SMs that may disable themselves, local attestation through
+ * sancus_verify and jumping to callee SM entry point needs to happen
+ * atomically. This concern is left to the application developer, e.g., SMs
+ * should not call sancus_disable when they might still be called by a
+ * trusted caller SM (and the caller SM can verify this is indeed not the case
+ * by local attestation of the callee SM code section).
  */
 always_inline void sancus_disable(void *continuation)
 {
