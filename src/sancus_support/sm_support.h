@@ -329,7 +329,7 @@ always_inline int is_buffer_outside_region(void *start, void *end,
   }
 
   /* check for int overflow and finally validate `buf` falls outside */ 
-  if( (buf <= buf_end) && (end <= buf) || (start > buf_end) ) {
+  if( (buf <= buf_end) && ((end <= buf) || (start > buf_end))) {
     return 1;
   }
 
