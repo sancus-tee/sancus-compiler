@@ -46,6 +46,8 @@ extern char __sm_num_inputs;
 #define SM_NAME X
 
 // declare symbols for the public/secret regions
-extern char __PS(SM_NAME), __PE(SM_NAME), __SS(SM_NAME), __SE(SM_NAME);
+#define __SECTION(sect, name) sect(name)
+extern char __SECTION(__PS, SM_NAME), __SECTION(__PE, SM_NAME), 
+            __SECTION(__SS, SM_NAME), __SECTION(__SE, SM_NAME);
 
 #endif
