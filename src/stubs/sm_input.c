@@ -3,20 +3,20 @@
 #include <alloca.h>
 #include <stdlib.h>
 
-void SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
+uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
                                          const void* payload, size_t len)
 {
     if( !sancus_is_outside_sm(SM_NAME, (void *) payload, len)) {
-      return;
+      return 1;
     }
 
     if(conn_idx >= __sm_num_connections)
-      return; // bad ID given by caller
+      return 2; // bad ID given by caller
 
     Connection *conn = &__sm_io_connections[conn_idx];
 
     if (conn->io_id >= SM_NUM_INPUTS)
-      return;
+      return 3;
 
     // associated data only contains the nonce, therefore we can use this
     // this trick to build the array fastly (i.e. by swapping the bytes)
@@ -53,4 +53,6 @@ void SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
          __sm_input_callbacks[conn->io_id](input_buffer, data_len);
       }
     }
+
+    return 0;
 }
