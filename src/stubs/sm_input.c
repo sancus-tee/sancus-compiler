@@ -6,53 +6,34 @@
 uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
                                          const void* payload, size_t len)
 {
-    if( !sancus_is_outside_sm(SM_NAME, (void *) payload, len)) {
+    // sanitize input buffer
+    if(!sancus_is_outside_sm(SM_NAME, (void *) payload, len)) {
       return 1;
     }
 
-    if(conn_idx >= __sm_num_connections)
-      return 2; // bad ID given by caller
+    // check correctness of other parameters
+    if(len < SANCUS_TAG_SIZE || conn_idx >= __sm_num_connections) {
+      return 2;
+    }
 
     Connection *conn = &__sm_io_connections[conn_idx];
-
-    if (conn->io_id >= SM_NUM_INPUTS)
-      return 3;
 
     // associated data only contains the nonce, therefore we can use this
     // this trick to build the array fastly (i.e. by swapping the bytes)
     const uint16_t nonce_rev = conn->nonce << 8 | conn->nonce >> 8;
     const size_t data_len = len - SANCUS_TAG_SIZE;
+    const uint8_t* cipher = payload;
+    const uint8_t* tag = cipher + data_len;
+    // TODO check for stack overflow!
+    uint8_t* input_buffer = alloca(data_len);
 
-    if(data_len == 0) {
-      // In this case, sancus_unwrap would always fail due to some bug
-      // therefore we just check if the tag is correct.
-      const uint8_t *tag = payload;
-      uint8_t expected_tag[SANCUS_TAG_SIZE];
-      sancus_tag_with_key(conn->key, &nonce_rev, sizeof(nonce_rev), expected_tag);
-      int success = 1, i;
-      for(i=0; i<SANCUS_TAG_SIZE; i++) {
-        if(tag[i] != expected_tag[i]) {
-          success = 0;
-          break;
-        }
-      }
-
-      if(success) {
-        conn->nonce++;
-        __sm_input_callbacks[conn->io_id](NULL, 0);
-      }
-    }
-    else {
-      const uint8_t* cipher = payload;
-      const uint8_t* tag = cipher + data_len;
-      // TODO check for stack overflow!
-      uint8_t* input_buffer = alloca(data_len);
-      if (sancus_unwrap_with_key(conn->key, &nonce_rev, sizeof(nonce_rev),
-                                 cipher, data_len, tag, input_buffer)) {
-         conn->nonce++;
-         __sm_input_callbacks[conn->io_id](input_buffer, data_len);
-      }
+    if (sancus_unwrap_with_key(conn->key, &nonce_rev, sizeof(nonce_rev),
+                               cipher, data_len, tag, input_buffer)) {
+       conn->nonce++;
+       __sm_input_callbacks[conn->io_id](input_buffer, data_len);
+       return 0;
     }
 
-    return 0;
+    // here only if decryption fails
+    return 4;
 }

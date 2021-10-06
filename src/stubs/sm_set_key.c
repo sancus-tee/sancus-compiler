@@ -17,11 +17,13 @@ uint16_t SM_ENTRY(SM_NAME) __sm_set_key(const uint8_t* ad, const uint8_t* cipher
     io_index io_id = (ad[2] << 8) | ad[3];
     uint16_t nonce = (ad[4] << 8) | ad[5];
 
+    // check if there is still space left in the array
     if (__sm_num_connections == SM_MAX_CONNECTIONS) {
       return 2;
     }
 
-    if(nonce != __sm_num_connections) {
+    // check parameters
+    if(nonce != __sm_num_connections || io_id >= SM_NUM_INPUTS) {
       return 3;
     }
 
