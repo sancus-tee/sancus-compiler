@@ -35,5 +35,5 @@ uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
     }
 
     // here only if decryption fails
-    return 4;
+    return 3;
 }
