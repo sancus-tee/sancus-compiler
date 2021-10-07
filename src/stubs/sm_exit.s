@@ -19,6 +19,14 @@ __sm_exit:
     push r11
     clr  r11
 
+    ; Get the ID that we are about to call and store it
+    ; This will help us later to make sure returns are legit
+    push r15
+    mov r8, r15
+    .word 0x1386
+    mov r15, &__sm_ssa_ocall_id
+    pop r15
+
     ; clear unused argument registers
     rra r7
     jc 1f

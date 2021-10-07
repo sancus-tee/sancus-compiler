@@ -65,13 +65,28 @@ __sm_entry:
     br #__sm_isr
 
 1:
-    ; We are not called by an IRQ. Fill __sm_ssa_caller_id on ecall and on ocall return.
+    ; We are not called by an IRQ.
+    ; Check whether we need to fill __sm_ssa_caller_id
+    ; We do this on ECALLS or on returns from OCALLs:
+    ; Is this an ECALL?
     tst &__sm_ssa_caller_id
     jeq 1f
+    ; Is this a return from an OCALL?
     cmp #0xffff, r6
     jne 2f
+    ; We can not fully trust the r6 response (but need it to allow other calls from that SM)
+    ; Let's also double check that we have an ocall pending from that caller
+    ; Does ocall_id exist?
+    tst &__sm_ssa_ocall_id
+    jne 2f
+    ; Is ocall_id equal to caller_id?
+    push r14
+    mov &__sm_ssa_ocall_id, r14
+    cmp r14, r15
+    pop r14
+    jne 2f
 1:
-    .word 0x1387
+    ; Overwrite caller_id field in SSA frame (caller_id still in r15)
     mov r15, &__sm_ssa_caller_id
 
 2:
@@ -91,12 +106,40 @@ __sm_entry:
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
+    ; We can not fully trust the r6 response (but need it to allow other calls from that SM)
+    ; Let's also double check that we have an ocall pending from that caller
+    ; Does ocall_id exist?
+    tst &__sm_ssa_ocall_id
+    jne .Lerror
+    ; Is ocall_id equal to caller_id?
+    push r14
+    push r15
+    mov &__sm_ssa_ocall_id,  r14
+    mov &__sm_ssa_caller_id, r15
+    cmp r14, r15
+    pop r15
+    pop r14
+    jne .Lerror ; The caller is trying to return but was never called. Abort
     br #__ret_entry ; defined in exit.s
 
 1:
     ; check if the given index (r6) is within bounds
     cmp #__sm_nentries, r6
     jhs .Lerror
+
+    ; check if the given return point of the ECALL also belongs to the caller
+    push r14
+    push r15
+    ; Get the ID of the module at the return address
+    mov r7, r15
+    .word 0x1386
+    ; Get the ID of our caller and compare them
+    mov &__sm_ssa_caller_id, r14
+    cmp r14, r15
+    pop r15
+    pop r14
+    ; If IDs do not match, the caller asks us to return to another entity than itself. Abort.
+    jne .Lerror
 
     ; store callee-save registers
     push r4
