@@ -66,60 +66,42 @@ __sm_entry:
 
 1:
     ; We are not called by an IRQ.
-    ; Check whether we need to fill __sm_ssa_caller_id
-    ; We do this on ECALLS or on returns from OCALLs:
-    ; Is this an ECALL?
-    tst &__sm_ssa_caller_id
-    jeq 1f
-    ; Is this a return from an OCALL?
-    cmp #0xffff, r6
-    jne 2f
-    ; We can not fully trust the r6 response (but need it to allow other calls from that SM)
-    ; Let's also double check that we have an ocall pending from that caller
-    ; Does ocall_id exist?
-    tst &__sm_ssa_ocall_id
-    jne 2f
-    ; Is ocall_id equal to caller_id?
-    push r14
-    mov &__sm_ssa_ocall_id, r14
-    cmp r14, r15
-    pop r14
-    jne 2f
-1:
-    ; Overwrite caller_id field in SSA frame (caller_id still in r15)
-    mov r15, &__sm_ssa_caller_id
-
-2:
-    ; Pop r15 again from the stack (we don't need the caller_id anymore)
-    pop r15
     ; check if this is a return from a interrupt
     bit #0x1, &__sm_ssa_sp
-
     jz 1f
     ; restore execution state if the sm was resumed
     br #__reti_entry ; defined in exit.s
 
 1:
+    ; if waiting for an ORET, only the callee is allowed to  return and we do
+    ; not support nested ecalls (hence we do not look at the caller-provided r6
+    ; and force it to 0xffff so the ret_entry path below will be taken)
+    tst &__sm_ssa_ocall_id
+    jz .Laccept_call
+    ; Is ocall_id equal to caller_id?
+    cmp &__sm_ssa_ocall_id, r15
+    jne .Lreject_call
+    mov #0xffff, r6
+    clr &__sm_ssa_ocall_id
+    jmp .Laccept_call
+
+.Lreject_call:
+    ; note: at this point we just want to leave the enclave while leaving its
+    ; internal state unmodified; registers do not contain secrets at this
+    ; point, so no need to clear them
+    br #error
+
+.Laccept_call:
+    ; Overwrite caller_id field in SSA frame (caller_id still in r15)
+    mov r15, &__sm_ssa_caller_id
+    ; Pop r15 again from the stack (we don't need the caller_id anymore)
+    pop r15
     ; === safe to handle IRQs now ===
     eint
     ; ========================= Aion CLIX length ENDS here =========================
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
-    ; We can not fully trust the r6 response (but need it to allow other calls from that SM)
-    ; Let's also double check that we have an ocall pending from that caller
-    ; Does ocall_id exist?
-    tst &__sm_ssa_ocall_id
-    jne .Lerror
-    ; Is ocall_id equal to caller_id?
-    push r14
-    push r15
-    mov &__sm_ssa_ocall_id,  r14
-    mov &__sm_ssa_caller_id, r15
-    cmp r14, r15
-    pop r15
-    pop r14
-    jne .Lerror ; The caller is trying to return but was never called. Abort
     br #__ret_entry ; defined in exit.s
 
 1:
@@ -128,16 +110,13 @@ __sm_entry:
     jhs .Lerror
 
     ; check if the given return point of the ECALL also belongs to the caller
-    push r14
     push r15
     ; Get the ID of the module at the return address
     mov r7, r15
     .word 0x1386
     ; Get the ID of our caller and compare them
-    mov &__sm_ssa_caller_id, r14
-    cmp r14, r15
+    cmp &__sm_ssa_caller_id, r15
     pop r15
-    pop r14
     ; If IDs do not match, the caller asks us to return to another entity than itself. Abort.
     jne .Lerror
 
@@ -192,4 +171,8 @@ __sm_entry:
     br r7
 
 .Lerror:
-    br #exit
+    ; something really went wrong
+    ; infinite loop as jumping outside might leave inconsistent internal state
+    ; and/or leak secrets in registers
+1:
+    jmp 1b
