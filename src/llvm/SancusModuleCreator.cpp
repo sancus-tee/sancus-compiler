@@ -656,7 +656,9 @@ CallSite SancusModuleCreator::handleSancusGetCallerId(CallSite cs)
     if (callerInfo.isInSm){
         asmStr = Twine("mov &" + callerInfo.getCallerID() + ", $0\n\t").str();
     } else {
-        asmStr = Twine( ".word 0x1387\n\t").str();
+        asmStr = Twine( ".word 0x1387\n\t"
+                        "mov r15, $0\n\t"
+                        ).str();
     }
 
     /* callerID is stored in SSA */
