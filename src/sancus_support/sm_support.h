@@ -505,6 +505,51 @@ always_inline int sancus_wrap(const void* ad, size_t ad_len,
 }
 
 /**
+ * The same as sancus_wrap_with_key() but only produces the MAC of the message.
+ */
+always_inline int sancus_tag_with_key(const void* key,
+                                      const void* body, size_t body_len,
+                                      void* tag)
+{
+    return sancus_wrap_with_key(key, body, body_len, NULL, 0, NULL, tag);
+}
+
+/**
+ * The same as sancus_wrap() but only produces the MAC of the message.
+ */
+always_inline int sancus_tag(const void* body, size_t body_len, void* tag)
+{
+    return sancus_wrap(body, body_len, NULL, 0, NULL, tag);
+}
+
+/**
+ * Verify if the MAC computed over `body` matches with the content of `tag`
+ */
+always_inline int sancus_untag_with_key(const void* key, const void* body,
+                                        size_t body_len, const void* tag)
+{
+    unsigned char computed_tag[SANCUS_TAG_SIZE];
+
+    // compute MAC over `body`
+    if ( !sancus_tag_with_key(key, body, body_len, computed_tag) ) {
+      return 0;
+    }
+
+    // compare MAC with provided reference `tag`
+    return constant_time_cmp(tag, computed_tag, SANCUS_TAG_SIZE) == 0;
+}
+
+/**
+* Verify if the MAC computed over `body` matches with the content of `tag`
+*
+* This is the same as sancus_untag_with_key using the key of the caller module.
+*/
+always_inline int sancus_untag(const void* body, size_t body_len, const void* tag)
+{
+    return sancus_untag_with_key(NULL, body, body_len, tag);
+}
+
+/**
  * Unwrap a message using the Sancus authenticated encryption features.
  *
  * See sancus_wrap_with_key() for an explanation of the parameters.
@@ -553,24 +598,6 @@ always_inline int sancus_unwrap(const void* ad, size_t ad_len,
 {
     return sancus_unwrap_with_key(NULL, ad, ad_len, cipher, cipher_len,
                                   tag, body);
-}
-
-/**
- * The same as sancus_wrap() but only produces the MAC of the message.
- */
-always_inline int sancus_tag(const void* body, size_t body_len, void* tag)
-{
-    return sancus_wrap(body, body_len, NULL, 0, NULL, tag);
-}
-
-/**
- * The same as sancus_wrap_with_key() but only produces the MAC of the message.
- */
-always_inline int sancus_tag_with_key(const void* key,
-                                      const void* body, size_t body_len,
-                                      void* tag)
-{
-    return sancus_wrap_with_key(key, body, body_len, NULL, 0, NULL, tag);
 }
 
 /**
