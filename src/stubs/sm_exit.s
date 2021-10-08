@@ -89,6 +89,8 @@ __reti_entry:
     .global __ret_entry
     .type __ret_entry,@function
 __ret_entry:
+    ; Remove stack pointer in sm_sp again, as this is also used as an OCALL marker.
+    mov #0, &__sm_sp
     ; restore callee-save registers
     pop r11
     pop r10

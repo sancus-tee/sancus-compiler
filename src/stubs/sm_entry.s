@@ -78,7 +78,8 @@ __sm_entry:
     ; caller-provided r6 and force it to 0xffff so the ret_entry path below
     ; will be taken)
     and #0x7FFF, r6
-    tst &__sm_ssa_ocall_id
+    ; Test whether sm_sp is set (this is only set on OCALLs)
+    tst &__sm_sp
     jz .Laccept_call
     ; Is ocall_id equal to caller_id?
     cmp &__sm_ssa_ocall_id, r15
