@@ -74,8 +74,9 @@ __sm_entry:
 
 1:
     ; if waiting for an ORET, only the callee is allowed to  return and we do
-    ; not support nested ecalls (hence we do not look at the caller-provided r6
+    ; not support nested ecalls (hence we sanitize the caller-provided r6
     ; and force it to 0xffff so the ret_entry path below will be taken)
+    and #0x7FFF, r6
     tst &__sm_ssa_ocall_id
     jz .Laccept_call
     ; Is ocall_id equal to caller_id?
@@ -88,7 +89,8 @@ __sm_entry:
 .Lreject_call:
     ; note: at this point we just want to leave the enclave while leaving its
     ; internal state unmodified; registers do not contain secrets at this
-    ; point, so no need to clear them
+    ; point (except possibly the stored stack pointer), so no need to clear others
+    clr r1
     br #error
 
 .Laccept_call:
