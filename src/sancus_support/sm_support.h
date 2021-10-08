@@ -312,6 +312,29 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 #define always_inline static inline __attribute__((always_inline))
 
 /**
+ * Performs constant time comparison between to buffers
+ * Returns 0 if the first `n` bytes of the two buffers are equal, -1 otherwise
+ */
+always_inline int constant_time_cmp(const unsigned char *x_,
+                                    const unsigned char *y_,
+                                    const unsigned int n)
+{
+    const volatile unsigned char *volatile x =
+        (const volatile unsigned char *volatile) x_;
+    const volatile unsigned char *volatile y =
+        (const volatile unsigned char *volatile) y_;
+    volatile unsigned int d = 0U;
+    int i;
+
+    for (i = 0; i < n; i++) {
+        d |= x[i] ^ y[i];
+    }
+
+    return (1 & ((d - 1) >> 8)) - 1;
+}
+
+/**
+ * Disable the protection of the calling module.
  * DANGEROUS: Disable the protection of the calling module.
  *
  * NOTE: On Sancus cores that support interruptible enclaves, the
@@ -582,7 +605,7 @@ always_inline sm_id sancus_get_self_id(void)
  * The calling module is defined as the previously executing module. That is,
  * the module that entered the currently executing module.
  *
- * @note This function is implemented as a compiler intrinsic to 
+ * @note This function is implemented as a compiler intrinsic to
  * be able to read it from the SM's SSA frame.
   */
 sm_id sancus_get_caller_id(void);
