@@ -668,8 +668,6 @@ data_section = '''. = ALIGN(2);
     __sm_{0}_ssa_base = .;
     __sm_{0}_pc = .;
     . += 2;
-    __sm_{0}_ssa_thread_id = .;
-    . += 2;
     __sm_{0}_ssa_caller_id = .;
     . += 2;
     __sm_{0}_ssa_ocall_id = .;
@@ -744,7 +742,6 @@ for sm in sms:
                '__sm_ssa_sp'     : '__sm_{}_ssa_sp'.format(sm),
                '__sm_sp'         : '__sm_{}_sp'.format(sm),
                '__sm_pc'         : '__sm_{}_pc'.format(sm),
-               '__sm_ssa_thread_id'     : '__sm_{}_ssa_thread_id'.format(sm),
                '__sm_ssa_ocall_id'     : '__sm_{}_ssa_ocall_id'.format(sm),
                '__sm_ssa_caller_id'     : '__sm_{}_ssa_caller_id'.format(sm),
                '__sm_irq_sp'     : '__sm_{}_irq_sp'.format(sm),
