@@ -19,6 +19,14 @@ __sm_exit:
     push r11
     clr  r11
 
+    ; Get the ID that we are about to call and store it
+    ; This will help us later to make sure returns are legit
+    push r15
+    mov r8, r15
+    .word 0x1386
+    mov r15, &__sm_ssa_ocall_id
+    pop r15
+
     ; clear unused argument registers
     rra r7
     jc 1f
@@ -44,6 +52,8 @@ __sm_exit:
     .global __reti_entry
     .type __reti_entry,@function
 __reti_entry:
+    ; Pop registers backwards from SSA end -> SSA base
+    mov #__sm_ssa_base-28, r1
     pop r4
     pop r5
     pop r6
@@ -56,16 +66,31 @@ __reti_entry:
     pop r13
     pop r14
     pop r15
+    ; we want to pop r2 but want to clear the GIE bit first
+    ; otherwise we may be interrupted on the next two instructions which 
+    ; could overwrite our SSA_SP and SSA_PC
+    bic #8, 0(r1)
+    pop r2
 
-    ; clear sp
-    mov #0, &__sm_sp
+    ; restore sp and clear memory pointer
+    mov &__sm_ssa_sp, r1
+    mov #0, &__sm_ssa_sp
+    
+    ; === safe to handle IRQs now ===
+    ; If we allow interrupts before, the IRQ routine
+    ; could overwrite our stored registers
+    eint
+    ; ========================= Aion CLIX length ENDS here =========================
 
-    reti
+    ; branch to pc (r2 already restored manually above)
+    br &__sm_pc
 
     .align 2
     .global __ret_entry
     .type __ret_entry,@function
 __ret_entry:
+    ; Remove stack pointer in sm_sp again, as this is also used as an OCALL marker.
+    mov #0, &__sm_sp
     ; restore callee-save registers
     pop r11
     pop r10

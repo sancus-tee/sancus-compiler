@@ -6,17 +6,36 @@
     ; r6: ID of entry point to be called, 0xffff if returning
     ; r7: return address
 __sm_entry:
-    ; === need a secure stack to handle IRQs ===
+    ; On entry, disable interrupts. This will not work (NOP) with Aion but will work with default Sancus.
     dint
+    ; First remove ssa base addr to notify violation handler to not use this SMs violation pointer
+    mov #0, &__sm_ssa_base_addr
+    ; Back up r15 to use it for clix
+    mov r15, &__sm_tmp
+    ; In Aion mode, the dint above did nothing. In that case, set up clix length and call clix (word 0x1389)
+    mov #100, r15 
+    .word 0x1389
+    ; ========================= Aion CLIX length STARTS here =========================
+    ; Restore r15
+    mov &__sm_tmp, r15
 
     ; If we are here because of an IRQ, we will need the current SP later. We do
     ; do not store it in its final destination yet (__sm_irq_sp) because we may
     ; not actually be called by an IRQ in which case we might overwrite a stored
     ; stack pointer.
     mov r1, &__sm_tmp
-    # Switch stack.
-    ; __sm_sp is our stackpointer
-    mov #__sm_sp, &__sm_sp_addr
+
+    ; Initialize SSA frame address for IRQ logic
+    ; Technically, this could be set to any SSA but we have just one for now
+    mov #__sm_ssa_base, &__sm_ssa_base_addr
+    
+    ; Our stack pointer is either at __sm_ssa_sp or __sm_sp, depending
+    ; on whether we got interrupted last time or not. Pick __sm_sp only if 
+    ; __sm_ssa_sp is empty.
+    mov &__sm_ssa_sp, r1
+    cmp #0, r1
+    jne 1f
+    ; ssa_sp is empty -> __sm_sp is our stackpointer, it lies at #ssa_base-2
     mov &__sm_sp, r1
     ; initialize sp on first entry
     cmp #0x0, r1
@@ -24,18 +43,7 @@ __sm_entry:
     mov #__sm_stack_init, r1
 
 1:
-    ; check if this is a return from a interrupt
-    bit #0x1, &__sm_sp
-
-    ; === safe to handle IRQs now ===
-    eint
-
-    jz 1f
-    ; restore execution state if the sm was resumed
-    br #__reti_entry ; defined in exit.s
-
-1:
-    ; check of this is an IRQ
+    ; check if this is an IRQ
     push r15
     ; sancus_get_caller_id()
     .word 0x1387
@@ -55,9 +63,39 @@ __sm_entry:
     ; If we just do je __sm_isr we get a PCREL relocation which our runtime
     ; linker doesn't understand yet.
     br #__sm_isr
-1:
-    pop r15
 
+1:
+    ; We are not called by an IRQ.
+    ; check if this is a return from a interrupt
+    bit #0x1, &__sm_ssa_sp
+    jz 1f
+    ; restore execution state if the sm was resumed
+    br #__reti_entry ; defined in exit.s
+
+1:
+    ; if waiting for an ORET, only the callee is allowed to  return and we do
+    ; not support nested ecalls (hence we clear the highest bit of the
+    ; caller-provided r6 and force it to 0xffff so the ret_entry path below
+    ; will be taken)
+    and #0x7FFF, r6
+    ; Test whether sm_sp is set (this is only set on OCALLs)
+    tst &__sm_sp
+    jz .Laccept_call
+    ; Is ocall_id equal to caller_id?
+    cmp &__sm_ssa_ocall_id, r15
+    jne .Lerror
+    mov #0xffff, r6
+    clr &__sm_ssa_ocall_id
+    jmp .Laccept_call
+
+.Laccept_call:
+    ; Overwrite caller_id field in SSA frame (caller_id still in r15)
+    mov r15, &__sm_ssa_caller_id
+    ; Pop r15 again from the stack (we don't need the caller_id anymore)
+    pop r15
+    ; === safe to handle IRQs now ===
+    eint
+    ; ========================= Aion CLIX length ENDS here =========================
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
@@ -67,6 +105,17 @@ __sm_entry:
     ; check if the given index (r6) is within bounds
     cmp #__sm_nentries, r6
     jhs .Lerror
+
+    ; check if the given return point of the ECALL also belongs to the caller
+    push r15
+    ; Get the ID of the module at the return address
+    mov r7, r15
+    .word 0x1386
+    ; Get the ID of our caller and compare them
+    cmp &__sm_ssa_caller_id, r15
+    pop r15
+    ; If IDs do not match, the caller asks us to return to another entity than itself. Abort.
+    jne .Lerror
 
     ; store callee-save registers
     push r4
@@ -114,8 +163,18 @@ __sm_entry:
 
 1:
     mov #0xffff, r6
+    mov #0, &__sm_ssa_caller_id
     mov #0, &__sm_sp
     br r7
 
 .Lerror:
-    br #exit
+    ; caller provided poisoned arguments -> trigger an intentional violation by
+    ; illegally writing to the SM text section
+    ; NOTE: we don't support nested ecalls, so we can simply leave the SM
+    ; internal state untouched and ready for a new ecall
+    ; NOTE: clear SSA adddress so enclave-internal state is not touched
+    mov #0, &__sm_ssa_base_addr
+    mov #1, &__sm_entry
+    ; should never reach here
+1:
+    jmp 1b

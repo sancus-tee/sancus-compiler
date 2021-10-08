@@ -312,7 +312,22 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 #define always_inline static inline __attribute__((always_inline))
 
 /**
- * Disable the protection of the calling module.
+ * DANGEROUS: Disable the protection of the calling module.
+ *
+ * NOTE: On Sancus cores that support interruptible enclaves, the
+ * compiler/runtime does _not_ transparently take care of atomicity concerns
+ * when disabling enclaves, i.e., secure linking is currently not meant to be
+ * interrupt-safe. If this SM is being called by another one, the other SM may
+ * be interrupted between the sm_verify check and the actual call into the
+ * function. If sancus_disable is executed in this window, an attacker could
+ * fully control the SM call and the return to the other SM.
+
+ * Thus, for callee SMs that may disable themselves, local attestation through
+ * sancus_verify and jumping to callee SM entry point needs to happen
+ * atomically. This concern is left to the application developer, e.g., SMs
+ * should not call sancus_disable when they might still be called by a
+ * trusted caller SM (and the caller SM can verify this is indeed not the case
+ * by local attestation of the callee SM code section).
  */
 always_inline void sancus_disable(void *continuation)
 {
@@ -334,7 +349,8 @@ always_inline void sancus_disable(void *continuation)
         "clr r12\n\t"
         "clr r13\n\t"
         "clr r14\n\t"
-        ".word 0x1380\n\t"
+        "1: .word 0x1380\n\t"
+        "jz 1b\n\t" /* restart on IRQ */
         ::"m"(continuation):);
 }
 
@@ -349,7 +365,8 @@ always_inline sm_id sancus_verify_address(const void* expected_tag,
     sm_id ret;
     asm("mov %1, r14\n\t"
         "mov %2, r15\n\t"
-        ".word 0x1382\n\t"
+        "1: .word 0x1382\n\t"
+        "jz 1b\n\t" /* restart on IRQ */
         "mov r15, %0"
         : "=m"(ret)
         : "r"(address), "r"(expected_tag)
@@ -382,18 +399,18 @@ always_inline sm_id sancus_verify(const void* expected_tag,
  * for the definition of the calling module.
  *
  * @return True iff the verification succeeded.
+ *
+ * NOTE: This function is deprecated as it is not interrupt-safe and can be
+ * easily implemented using other primitives as follows:
+ *
+ *      sancus_verify_caller(tag) = sancus_verify(tag, caller_adrs) &&
+ *          (sancus_get_id(caller_adrs) == sancus_get_caller_id())
+ *
+ * where the alleged caller_adrs can be passed by an untrusted caller (as is
+ * already done in the sm_entry.S enclave runtime, where it can optionally be
+ * retrieved transparently)
  */
-always_inline int sancus_verify_caller(const void* expected_tag)
-{
-    int ret;
-    asm("mov %1, r15\n\t"
-        ".word 0x1383\n\t"
-        "mov r15, %0"
-        : "=m"(ret)
-        : "r"(expected_tag)
-        : "15");
-    return ret;
-}
+//always_inline int sancus_verify_caller(const void* expected_tag)
 
 /**
  * Wrap a message using the Sancus authenticated encryption features.
@@ -439,7 +456,8 @@ always_inline int sancus_wrap_with_key(const void* key,
         "mov %5, r13\n\t"
         "mov %6, r14\n\t"
         "mov %7, r15\n\t"
-        ".word 0x1384\n\t"
+        "1: .word 0x1384\n\t"
+        "jz 1b\n\t" /* restart on IRQ */
         "mov r15, %0"
         : "=m"(ret)
         : "m"(key),
@@ -487,7 +505,8 @@ always_inline int sancus_unwrap_with_key(const void* key,
         "mov %5, r13\n\t"
         "mov %6, r14\n\t"
         "mov %7, r15\n\t"
-        ".word 0x1385\n\t"
+        "1: .word 0x1385\n\t"
+        "jz 1b\n\t" /* restart on IRQ */
         "mov r15, %0"
         : "=m"(ret)
         : "m"(key),
@@ -539,6 +558,7 @@ always_inline sm_id sancus_get_id(void* addr)
     sm_id ret;
     asm("mov %1, r15\n\t"
         ".word 0x1386\n\t"
+        "jz .\n\t" /* should never fail */
         "mov r15, %0"
         : "=m"(ret)
         : "m"(addr)
@@ -561,17 +581,11 @@ always_inline sm_id sancus_get_self_id(void)
  *
  * The calling module is defined as the previously executing module. That is,
  * the module that entered the currently executing module.
- */
-always_inline sm_id sancus_get_caller_id(void)
-{
-    sm_id ret;
-    asm(".word 0x1387\n\t"
-        "mov r15, %0"
-        : "=m"(ret)
-        :
-        : "15");
-    return ret;
-}
+ *
+ * @note This function is implemented as a compiler intrinsic to 
+ * be able to read it from the SM's SSA frame.
+  */
+sm_id sancus_get_caller_id(void);
 
 /**
  * Perform a call to a Sancus module.

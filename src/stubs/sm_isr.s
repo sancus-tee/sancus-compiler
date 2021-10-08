@@ -3,6 +3,9 @@
     .global __sm_isr
     .type __sm_isr,@function
 
+; The default isr stub performs the CPU state storing and resuming. In between, it calls
+; the ISR function that can deal with the interrupt but does not have to deal with 
+; carefully storing and resuming the CPU state.
 __sm_isr:
     ; Now that we are sure we are called by an IRQ, commit the SP.
     mov &__sm_tmp, &__sm_irq_sp
@@ -45,3 +48,4 @@ __sm_isr:
     mov r1, &__sm_sp
     mov &__sm_irq_sp, r1
     reti
+    ; ========================= Aion CLIX length ENDS here =========================
