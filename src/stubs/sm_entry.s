@@ -28,7 +28,21 @@ __sm_entry:
     ; Initialize SSA frame address for IRQ logic
     ; Technically, this could be set to any SSA but we have just one for now
     mov #__sm_ssa_base, &__sm_ssa_base_addr
+    
+    ; Our stack pointer is either at __sm_ssa_sp or __sm_sp, depending
+    ; on whether we got interrupted last time or not. Pick __sm_sp only if 
+    ; __sm_ssa_sp is empty.
+    mov &__sm_ssa_sp, r1
+    cmp #0, r1
+    jne 1f
+    ; ssa_sp is empty -> __sm_sp is our stackpointer, it lies at #ssa_base-2
+    mov &__sm_sp, r1
+    ; initialize sp on first entry
+    cmp #0x0, r1
+    jne 1f
+    mov #__sm_stack_init, r1
 
+1:
     ; check if this is an IRQ
     push r15
     ; sancus_get_caller_id()
@@ -81,14 +95,6 @@ __sm_entry:
     ; === safe to handle IRQs now ===
     eint
     ; ========================= Aion CLIX length ENDS here =========================
-
-    mov &__sm_sp, r1
-    ; initialize sp on first entry
-    cmp #0x0, r1
-    jne 1f
-    mov #__sm_stack_init, r1
-
-1:
     ; check if this is a return
     cmp #0xffff, r6
     jne 1f
