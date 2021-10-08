@@ -560,6 +560,11 @@ always_inline int sancus_unwrap_with_key(const void* key,
                                          size_t cipher_len,
                                          const void* tag, void* body)
 {
+    // fix: if cipher_len is zero, just compare the MACs using sancus_untag
+    if(cipher_len == 0) {
+      return sancus_untag_with_key(key, ad, ad_len, tag);
+    }
+
     void* ad_end = (char*)ad + ad_len;
     void* cipher_end = (char*)cipher + cipher_len;
     int ret;
