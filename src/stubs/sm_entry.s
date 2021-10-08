@@ -62,7 +62,7 @@ __sm_entry:
     ; if waiting for an ORET, only the callee is allowed to  return and we do
     ; not support nested ecalls (hence we sanitize the caller-provided r6
     ; and force it to 0xffff so the ret_entry path below will be taken)
-    and #0x7FFF, r6
+    or #0x7FFF, r6
     tst &__sm_ssa_ocall_id
     jz .Laccept_call
     ; Is ocall_id equal to caller_id?
