@@ -60,24 +60,18 @@ __sm_entry:
 
 1:
     ; if waiting for an ORET, only the callee is allowed to  return and we do
-    ; not support nested ecalls (hence we sanitize the caller-provided r6
-    ; and force it to 0xffff so the ret_entry path below will be taken)
-    or #0x7FFF, r6
+    ; not support nested ecalls (hence we clear the highest bit of the
+    ; caller-provided r6 and force it to 0xffff so the ret_entry path below
+    ; will be taken)
+    and #0x7FFF, r6
     tst &__sm_ssa_ocall_id
     jz .Laccept_call
     ; Is ocall_id equal to caller_id?
     cmp &__sm_ssa_ocall_id, r15
-    jne .Lreject_call
+    jne .Lerror
     mov #0xffff, r6
     clr &__sm_ssa_ocall_id
     jmp .Laccept_call
-
-.Lreject_call:
-    ; note: at this point we just want to leave the enclave while leaving its
-    ; internal state unmodified; registers do not contain secrets at this
-    ; point (except possibly the stored stack pointer), so no need to clear others
-    clr r1
-    br #error
 
 .Laccept_call:
     ; Overwrite caller_id field in SSA frame (caller_id still in r15)
@@ -167,8 +161,13 @@ __sm_entry:
     br r7
 
 .Lerror:
-    ; something really went wrong
-    ; infinite loop as jumping outside might leave inconsistent internal state
-    ; and/or leak secrets in registers
+    ; caller provided poisoned arguments -> trigger an intentional violation by
+    ; illegally writing to the SM text section
+    ; NOTE: we don't support nested ecalls, so we can simply leave the SM
+    ; internal state untouched and ready for a new ecall
+    ; NOTE: clear SSA adddress so enclave-internal state is not touched
+    mov #0, &__sm_ssa_base_addr
+    mov #1, &__sm_entry
+    ; should never reach here
 1:
     jmp 1b
