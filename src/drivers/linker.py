@@ -204,12 +204,6 @@ parser.add_argument('--project-path', type=Path, default=os.getcwd(),
                         '$PROJECT that is substituted for this Path in the linker. This allows projects '
                         'to give the linker the correct path at compile time while still supporting a generic, '
                         'project-dependent configuration file.')
-parser.add_argument('--num-connections',
-                    help='Parameter for Authentic Execution. Maximum number of '
-                    'connections that the module can have. '
-                    'This number impacts on the size of the module.',
-                    type=int,
-                    default=0)
 
 args, cli_ld_args = parser.parse_known_args()
 set_args(args)
@@ -861,12 +855,17 @@ for sm in sms:
     num_connections = ''
     io_connections = ''
 
+    if hasattr(sm_config[sm], "num_connections"):
+        sm_num_connections = sm_config[sm].num_connections
+    else:
+        sm_num_connections = 0
+
     if len(ios) > 0:
         num_connections += '__sm_{}_num_connections = .;\n'.format(sm)
         num_connections += '    . += 2;\n'
         num_connections += '    . = ALIGN(2);'
         io_connections += '__sm_{}_io_connections = .;\n'.format(sm)
-        io_connections += '    . += {};\n'.format(args.num_connections * CONNECTION_STRUCT_SIZE)
+        io_connections += '    . += {};\n'.format(sm_num_connections * CONNECTION_STRUCT_SIZE)
         io_connections += '    . = ALIGN(2);'
 
     # Set data section offset if peripheral access is set
@@ -901,7 +900,7 @@ for sm in sms:
         symbols.append('__sm_{}_io_{}_idx = {};'.format(sm, io, index))
 
     # Add symbols for the number of connections/inputs
-    symbols.append('__sm_{}_max_connections = {};'.format(sm, args.num_connections))
+    symbols.append('__sm_{}_max_connections = {};'.format(sm, sm_num_connections))
     symbols.append('__sm_{}_num_inputs = {};'.format(sm, len(inputs)))
 
     if args.prepare_for_sm_text_section_wrapping:
