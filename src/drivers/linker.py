@@ -851,7 +851,15 @@ for sm in sms:
         input_callbacks += '    KEEP({}(.sm.{}.callbacks))\n'.format(o_file, sm)
         input_callbacks += '    . = ALIGN(2);'
 
-    # Table of connections
+    """
+    Table of connections: in a reactive application, a connection links the
+    output of a SM (defined using the macro `SM_OUTPUT`) to the input of another
+    (defined using the macro `SM_INPUT`).
+    These connections are stored in a `Connection` array on each SM (see
+    `reactive_stubs_support.h`). The array is allocated here with a fixed size,
+    according to the `num_connections` parameter in the SM config (default 0).
+    """
+
     num_connections = ''
     io_connections = ''
 
