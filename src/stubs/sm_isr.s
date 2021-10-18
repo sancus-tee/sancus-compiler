@@ -42,6 +42,5 @@ __sm_isr:
     pop r15
 
     ; Switch the stack.
-    mov r1, &__sm_sp
     mov &__sm_irq_sp, r1
     reti
