@@ -312,6 +312,30 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 #define always_inline static inline __attribute__((always_inline))
 
 /**
+ * Performs constant time comparison between to buffers
+ * Returns 0 if the first `n` bytes of the two buffers are equal, -1 otherwise
+ * NOTE: Function copied from NaCL's libsodium, re-use allowed under ISC license.
+ */
+always_inline int constant_time_cmp(const unsigned char *x_,
+                                    const unsigned char *y_,
+                                    const unsigned int n)
+{
+    const volatile unsigned char *volatile x =
+        (const volatile unsigned char *volatile) x_;
+    const volatile unsigned char *volatile y =
+        (const volatile unsigned char *volatile) y_;
+    volatile unsigned int d = 0U;
+    int i;
+
+    for (i = 0; i < n; i++) {
+        d |= x[i] ^ y[i];
+    }
+
+    return (1 & ((d - 1) >> 8)) - 1;
+}
+
+/**
+ * Disable the protection of the calling module.
  * DANGEROUS: Disable the protection of the calling module.
  *
  * NOTE: On Sancus cores that support interruptible enclaves, the
@@ -482,6 +506,51 @@ always_inline int sancus_wrap(const void* ad, size_t ad_len,
 }
 
 /**
+ * The same as sancus_wrap_with_key() but only produces the MAC of the message.
+ */
+always_inline int sancus_tag_with_key(const void* key,
+                                      const void* body, size_t body_len,
+                                      void* tag)
+{
+    return sancus_wrap_with_key(key, body, body_len, NULL, 0, NULL, tag);
+}
+
+/**
+ * The same as sancus_wrap() but only produces the MAC of the message.
+ */
+always_inline int sancus_tag(const void* body, size_t body_len, void* tag)
+{
+    return sancus_wrap(body, body_len, NULL, 0, NULL, tag);
+}
+
+/**
+ * Verify if the MAC computed over `body` matches with the content of `tag`
+ */
+always_inline int sancus_untag_with_key(const void* key, const void* body,
+                                        size_t body_len, const void* tag)
+{
+    unsigned char computed_tag[SANCUS_TAG_SIZE];
+
+    // compute MAC over `body`
+    if ( !sancus_tag_with_key(key, body, body_len, computed_tag) ) {
+      return 0;
+    }
+
+    // compare MAC with provided reference `tag`
+    return (constant_time_cmp(tag, computed_tag, SANCUS_TAG_SIZE) == 0);
+}
+
+/**
+* Verify if the MAC computed over `body` matches with the content of `tag`
+*
+* This is the same as sancus_untag_with_key using the key of the caller module.
+*/
+always_inline int sancus_untag(const void* body, size_t body_len, const void* tag)
+{
+    return sancus_untag_with_key(NULL, body, body_len, tag);
+}
+
+/**
  * Unwrap a message using the Sancus authenticated encryption features.
  *
  * See sancus_wrap_with_key() for an explanation of the parameters.
@@ -492,6 +561,11 @@ always_inline int sancus_unwrap_with_key(const void* key,
                                          size_t cipher_len,
                                          const void* tag, void* body)
 {
+    // fix: if cipher_len is zero, just compare the MACs using sancus_untag
+    if(cipher_len == 0) {
+      return sancus_untag_with_key(key, ad, ad_len, tag);
+    }
+
     void* ad_end = (char*)ad + ad_len;
     void* cipher_end = (char*)cipher + cipher_len;
     int ret;
@@ -533,24 +607,6 @@ always_inline int sancus_unwrap(const void* ad, size_t ad_len,
 }
 
 /**
- * The same as sancus_wrap() but only produces the MAC of the message.
- */
-always_inline int sancus_tag(const void* body, size_t body_len, void* tag)
-{
-    return sancus_wrap(body, body_len, NULL, 0, NULL, tag);
-}
-
-/**
- * The same as sancus_wrap_with_key() but only produces the MAC of the message.
- */
-always_inline int sancus_tag_with_key(const void* key,
-                                      const void* body, size_t body_len,
-                                      void* tag)
-{
-    return sancus_wrap_with_key(key, body, body_len, NULL, 0, NULL, tag);
-}
-
-/**
  * Get the Sancus ID of the module loaded at @p addr.
  */
 always_inline sm_id sancus_get_id(void* addr)
@@ -582,7 +638,7 @@ always_inline sm_id sancus_get_self_id(void)
  * The calling module is defined as the previously executing module. That is,
  * the module that entered the currently executing module.
  *
- * @note This function is implemented as a compiler intrinsic to 
+ * @note This function is implemented as a compiler intrinsic to
  * be able to read it from the SM's SSA frame.
   */
 sm_id sancus_get_caller_id(void);
