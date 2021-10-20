@@ -314,6 +314,7 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
 /**
  * Performs constant time comparison between to buffers
  * Returns 0 if the first `n` bytes of the two buffers are equal, -1 otherwise
+ * NOTE: Function copied from NaCL's libsodium, re-use allowed under ISC license.
  */
 always_inline int constant_time_cmp(const unsigned char *x_,
                                     const unsigned char *y_,
@@ -536,7 +537,7 @@ always_inline int sancus_untag_with_key(const void* key, const void* body,
     }
 
     // compare MAC with provided reference `tag`
-    return constant_time_cmp(tag, computed_tag, SANCUS_TAG_SIZE) == 0;
+    return constant_time_cmp(tag, computed_tag, SANCUS_TAG_SIZE);
 }
 
 /**
