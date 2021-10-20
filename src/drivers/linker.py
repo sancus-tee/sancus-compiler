@@ -869,11 +869,14 @@ for sm in sms:
         sm_num_connections = 0
 
     if len(ios) > 0:
+        # make sure we allocate space even if num_connections is zero
+        io_connections_size = max(sm_num_connections * CONNECTION_STRUCT_SIZE, 2)
+
         num_connections += '__sm_{}_num_connections = .;\n'.format(sm)
         num_connections += '    . += 2;\n'
         num_connections += '    . = ALIGN(2);'
         io_connections += '__sm_{}_io_connections = .;\n'.format(sm)
-        io_connections += '    . += {};\n'.format(sm_num_connections * CONNECTION_STRUCT_SIZE)
+        io_connections += '    . += {};\n'.format(io_connections_size)
         io_connections += '    . = ALIGN(2);'
 
     # Set data section offset if peripheral access is set
