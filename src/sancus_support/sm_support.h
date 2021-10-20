@@ -537,7 +537,7 @@ always_inline int sancus_untag_with_key(const void* key, const void* body,
     }
 
     // compare MAC with provided reference `tag`
-    return constant_time_cmp(tag, computed_tag, SANCUS_TAG_SIZE);
+    return (constant_time_cmp(tag, computed_tag, SANCUS_TAG_SIZE) == 0);
 }
 
 /**
