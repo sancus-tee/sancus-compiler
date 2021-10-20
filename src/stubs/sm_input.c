@@ -18,6 +18,11 @@ uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
 
     Connection *conn = &__sm_io_connections[conn_idx];
 
+    // check if io_id is a valid input ID
+    if (conn->io_id >= SM_NUM_INPUTS) {
+      return 3;
+    }
+
     // associated data only contains the nonce, therefore we can use this
     // this trick to build the array fastly (i.e. by swapping the bytes)
     const uint16_t nonce_rev = conn->nonce << 8 | conn->nonce >> 8;
@@ -35,5 +40,5 @@ uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
     }
 
     // here only if decryption fails
-    return 3;
+    return 4;
 }

@@ -22,8 +22,8 @@ uint16_t SM_ENTRY(SM_NAME) __sm_set_key(const uint8_t* ad, const uint8_t* cipher
       return 2;
     }
 
-    // check parameters
-    if(nonce != __sm_num_connections || io_id >= SM_NUM_INPUTS) {
+    // check nonce
+    if(nonce != __sm_num_connections) {
       return 3;
     }
 
