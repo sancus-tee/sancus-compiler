@@ -1,7 +1,6 @@
 #include "reactive_stubs_support.h"
 
 #include <alloca.h>
-#include <stdlib.h>
 
 uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
                                          const void* payload, size_t len)
