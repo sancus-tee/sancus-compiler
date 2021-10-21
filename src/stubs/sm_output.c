@@ -16,7 +16,7 @@ SM_FUNC(SM_NAME) void __sm_send_output(io_index index,
         continue;
 
       uint8_t* payload = malloc(payload_len);
-      if (payload == NULL)
+      if (payload == NULL  || !sancus_is_outside_sm(SM_NAME, (void *) payload, payload_len))
         continue;
 
       // associated data only contains the nonce, therefore we can use this
