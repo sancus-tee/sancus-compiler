@@ -10,10 +10,13 @@ typedef void (*InputCallback)(const void*, size_t);
 
 typedef enum
 {
-    Ok                = 0x0,
-    IllegalConnection = 0x1,
-    MalformedPayload  = 0x2,
-    InternalError     = 0x3
+    Ok                    = 0x0,
+    IllegalConnection     = 0x1,
+    MalformedPayload      = 0x2,
+    IllegalParameters     = 0x3,
+    BufferInsideSM        = 0x4,
+    CryptoError           = 0x5,
+    InternalError         = 0x6
 } ResultCode;
 
 typedef struct Connection {
@@ -47,7 +50,7 @@ extern char __sm_num_inputs;
 
 // declare symbols for the public/secret regions
 #define __SECTION(sect, name) sect(name)
-extern char __SECTION(__PS, SM_NAME), __SECTION(__PE, SM_NAME), 
+extern char __SECTION(__PS, SM_NAME), __SECTION(__PE, SM_NAME),
             __SECTION(__SS, SM_NAME), __SECTION(__SE, SM_NAME);
 
 #endif

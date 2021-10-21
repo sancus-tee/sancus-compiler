@@ -5,9 +5,12 @@ uint16_t SM_ENTRY(SM_NAME) __sm_attest(const uint8_t* challenge, size_t len,
 {
     if( !sancus_is_outside_sm(SM_NAME, (void *) challenge, len) ||
         !sancus_is_outside_sm(SM_NAME, (void *) result, SANCUS_TAG_SIZE) ) {
-      return 1;
+      return BufferInsideSM;
     }
 
-    sancus_tag(challenge, len, result);
-    return 0;
+    if( !sancus_tag(challenge, len, result) ) {
+        return CryptoError;
+    }
+
+    return Ok;
 }

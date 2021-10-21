@@ -9,7 +9,7 @@ uint16_t SM_ENTRY(SM_NAME) __sm_set_key(const uint8_t* ad, const uint8_t* cipher
         !sancus_is_outside_sm(SM_NAME, (void *) cipher, SANCUS_KEY_SIZE) ||
         !sancus_is_outside_sm(SM_NAME, (void *) tag, SANCUS_TAG_SIZE) ||
         !sancus_is_outside_sm(SM_NAME, (void *) conn_idx, sizeof(uint16_t)) ) {
-      return 1;
+      return BufferInsideSM;
     }
 
     // Note: make sure we only use AD_SIZE bytes of the buffer `ad`
@@ -19,19 +19,19 @@ uint16_t SM_ENTRY(SM_NAME) __sm_set_key(const uint8_t* ad, const uint8_t* cipher
 
     // check if there is still space left in the array
     if (__sm_num_connections == SM_MAX_CONNECTIONS) {
-      return 2;
+      return InternalError;
     }
 
     // check nonce
     if(nonce != __sm_num_connections) {
-      return 3;
+      return MalformedPayload;
     }
 
     Connection *conn = &__sm_io_connections[__sm_num_connections];
     *conn_idx = __sm_num_connections;
 
     if (!sancus_unwrap(ad, AD_SIZE, cipher, SANCUS_KEY_SIZE, tag, conn->key)) {
-      return 4;
+      return CryptoError;
     }
 
     __sm_num_connections++;
@@ -39,5 +39,5 @@ uint16_t SM_ENTRY(SM_NAME) __sm_set_key(const uint8_t* ad, const uint8_t* cipher
     conn->conn_id = conn_id;
     conn->nonce = 0;
 
-    return 0;
+    return Ok;
 }

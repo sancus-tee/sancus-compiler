@@ -8,19 +8,19 @@ uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
 {
     // sanitize input buffer
     if(!sancus_is_outside_sm(SM_NAME, (void *) payload, len)) {
-      return 1;
+      return BufferInsideSM;
     }
 
     // check correctness of other parameters
     if(len < SANCUS_TAG_SIZE || conn_idx >= __sm_num_connections) {
-      return 2;
+      return IllegalParameters;
     }
 
     Connection *conn = &__sm_io_connections[conn_idx];
 
     // check if io_id is a valid input ID
     if (conn->io_id >= SM_NUM_INPUTS) {
-      return 3;
+      return IllegalConnection;
     }
 
     // associated data only contains the nonce, therefore we can use this
@@ -36,9 +36,9 @@ uint16_t SM_ENTRY(SM_NAME) __sm_handle_input(uint16_t conn_idx,
                                cipher, data_len, tag, input_buffer)) {
        conn->nonce++;
        __sm_input_callbacks[conn->io_id](input_buffer, data_len);
-       return 0;
+       return Ok;
     }
 
     // here only if decryption fails
-    return 4;
+    return CryptoError;
 }
