@@ -4,6 +4,7 @@
 #include "config.h"
 
 #include <stddef.h>
+#include <stdint.h>
 
 #if __GNUC__ >= 5 || __clang_major__ >= 5
 
@@ -312,10 +313,9 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
  * Returns true if buf is outside the memory region [start, end)
  * if start >= end, immediately return false
  */
-always_inline int is_buffer_outside_region(void *start, void *end,
-    void *buf, size_t len) {
-  void *buf_end;
-
+always_inline int is_buffer_outside_region(uintptr_t start, uintptr_t end,
+    uintptr_t buf, size_t len) {
+  uintptr_t buf_end;
   // make sure start < end, otherwise return false
   if (start >= end) {
     return 0;
