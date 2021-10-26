@@ -12,6 +12,7 @@ SM_CONFIG_DEFAULT_SM_MMIO_ENTRY=""
 SM_CONFIG_DEFAULT_SM_EXIT=""
 SM_CONFIG_DEFAULT_SM_ISR=""
 SM_CONFIG_DEFAULT_PERIPHERAL_OFFSET=0
+SM_CONFIG_DEFAULT_NUM_CONNECTIONS=None
 
 class SmParserError(Exception):
     """ 
@@ -125,6 +126,7 @@ class SmConfig:
         self._sm_exit  = _safe_config_parse('sm_exit',  SM_CONFIG_DEFAULT_SM_EXIT)
         self._sm_isr   = _safe_config_parse('sm_isr' ,  SM_CONFIG_DEFAULT_SM_ISR)
         self._peripheral_offset = _safe_config_parse('peripheral_offset', 0)
+        self._num_connections = _safe_config_parse('num_connections', SM_CONFIG_DEFAULT_NUM_CONNECTIONS)
 
     """
     Getters as properties for all class variables.
@@ -178,6 +180,13 @@ class SmConfig:
         else:
             raise AttributeError
     
+    @property
+    def num_connections(self):
+        if self._num_connections != SM_CONFIG_DEFAULT_NUM_CONNECTIONS:
+            return abs(self._num_connections)
+        else:
+            raise AttributeError
+
     def __str__(self):
         if self._contains_config:
             s = '' + self._name + ':\n'
@@ -187,6 +196,7 @@ class SmConfig:
             if hasattr(self, 'sm_exit'): s += '\t\t SM_EXIT: ' + self._sm_exit  + '\n'
             if hasattr(self, 'sm_isr'): s += '\t\t SM_ISR: ' + self._sm_isr  + '\n'
             if hasattr(self, 'peripheral_offset'): s += '\t\t Peripheral Offset: ' + str(self._peripheral_offset)  + '\n'
+            if hasattr(self, 'num_connections'): s += '\t\t Number of connections: ' + str(self._num_connections)  + '\n'
         else:
             s = 'No YAML config provided.'
         return s

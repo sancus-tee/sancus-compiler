@@ -23,6 +23,13 @@ my_sm_1:
     # amount of byte. This allows to map the data section over the
     # peripherals to grant exclusive and faster access to these peripherals
     - peripheral_offset: 159
+    # Set the maximum number of connections allowed for this SM in a reactive
+    # application. Connections link the output of a SM (defined using the macro
+    # `SM_OUTPUT`) with the input of another (defined using the macro
+    # `SM_INPUT`). If this SM does not have any inputs nor outputs, there is no
+    # need to specify this parameter (default value is zero). In the Authentic
+    # Execution framework, this parameter is automatically configured.
+    - num_connections: 3
 my_sm_2:
  	- disallow_outcalls: True
     
