@@ -313,9 +313,13 @@ sm_id sancus_enable_wrapped(struct SancusModule* sm, unsigned nonce, void* tag);
  * Returns true if buf is outside the memory region [start, end)
  * if start >= end, immediately return false
  */
-always_inline int is_buffer_outside_region(uintptr_t start, uintptr_t end,
-    uintptr_t buf, size_t len) {
+always_inline int is_buffer_outside_region(void *start_p, void *end_p,
+    void *buf_p, size_t len) {
+  uintptr_t start = (uintptr_t) start_p;
+  uintptr_t end   = (uintptr_t) end_p;
+  uintptr_t buf   = (uintptr_t) buf_p;
   uintptr_t buf_end;
+  
   // make sure start < end, otherwise return false
   if (start >= end) {
     return 0;
