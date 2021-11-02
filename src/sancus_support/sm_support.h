@@ -354,7 +354,7 @@ always_inline int constant_time_cmp(const unsigned char *x_,
     const volatile unsigned char *volatile y =
         (const volatile unsigned char *volatile) y_;
     volatile unsigned int d = 0U;
-    int i;
+    unsigned int i;
 
     for (i = 0; i < n; i++) {
         d |= x[i] ^ y[i];
