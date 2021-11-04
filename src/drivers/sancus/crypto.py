@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
 from . import config
-from . import paths
+from . import libsancuscrypt
 
-import ctypes
 import struct
 import re
 import binascii
@@ -15,8 +14,6 @@ import shutil
 from elftools.elf.elffile import ELFFile
 
 KEY_SIZE = config.SECURITY
-
-_lib = ctypes.cdll.LoadLibrary(paths.get_data_path() + '/libsancus-crypto.so')
 
 dump_c_array = 0
 
@@ -71,31 +68,7 @@ def _output_data(data, dump_c_array=False):
 
 
 def _get_sm_wrap_nonce(name, body):
-    return wrap(0, bytes(name, 'utf-8'), body)[1][:2][::-1]
-
-def wrap(key, ad, body):
-    # NOTE ctypes only understands bytes, not bytearrays
-    cipher = bytes(len(body))
-    tag = bytes(int(KEY_SIZE / 8))
-    ok = _lib.sancus_wrap(bytes(key), bytes(ad), ctypes.c_ulonglong(len(ad)),
-                          bytes(body), ctypes.c_ulonglong(len(body)),
-                          cipher, tag)
-    return (cipher, tag) if ok else None
-
-
-def unwrap(key, ad, cipher, tag):
-    body = bytes(len(cipher))
-    ok = _lib.sancus_unwrap(bytes(key), bytes(ad), ctypes.c_ulonglong(len(ad)),
-                            bytes(cipher), ctypes.c_ulonglong(len(cipher)),
-                            bytes(tag), bytes(body))
-    return body if ok else None
-
-
-def mac(key, msg):
-    ret = bytes(int(KEY_SIZE / 8))
-    _lib.sancus_mac(bytes(key), bytes(msg), ctypes.c_ulonglong(len(msg)), ret)
-    return ret
-
+    return libsancuscrypt.wrap(0, bytes(name, 'utf-8'), body)[1][:2][::-1]
 
 def _get_sm_section(elf_file, sm):
     sm_section = elf_file.get_section_by_name('.text.sm.{}'.format(sm))
@@ -141,11 +114,11 @@ def _get_sm_identity(file, sm):
     return identity
 
 def get_sm_key(file, sm, master_key):
-    return mac(master_key, _get_sm_identity(file, sm))
+    return libsancuscrypt.mac(master_key, _get_sm_identity(file, sm))
 
 
 def get_sm_mac(file, sm, key):
-    return mac(key, _get_sm_identity(file, sm))
+    return libsancuscrypt.mac(key, _get_sm_identity(file, sm))
 
 
 def fill_mac_sections(file, output_path):
@@ -189,7 +162,7 @@ def wrap_sm_text_sections(file, output_path, key):
             logging.info('Wrapping text section of SM %s', sm_name)
             section = elf_file.get_section_by_name(section_name)
             nonce = _get_sm_wrap_nonce(sm_name, section.data())
-            wrapped_section_data, tag = wrap(key, nonce, section.data())
+            wrapped_section_data, tag = libsancuscrypt.wrap(key, nonce, section.data())
 
             # Write wrapped section to output file
             out_file.seek(section['sh_offset'])
@@ -273,15 +246,15 @@ def main():
         logging.getLogger().setLevel(logging.INFO)
 
     if args.gen_vendor_key:
-        _output_data(mac(args.key, args.gen_vendor_key), args.c_array)
+        _output_data(libsancuscrypt.mac(args.key, args.gen_vendor_key), args.c_array)
     elif args.wrap:
         ad, body = args.wrap
-        cipher, tag = wrap(args.key, ad, body)
+        cipher, tag = libsancuscrypt.wrap(args.key, ad, body)
         _output_data(tag)
         _output_data(cipher)
     elif args.unwrap:
         ad, cipher, tag = args.unwrap
-        body = unwrap(args.key, ad, cipher, tag)
+        body = libsancuscrypt.unwrap(args.key, ad, cipher, tag)
 
         if body:
             _output_data(body)
@@ -291,7 +264,7 @@ def main():
         with open(args.in_file, 'rb') as file:
             _output_data(get_sm_mac(file, args.mac, args.key))
     elif args.tag:
-        _output_data(mac(args.key, args.tag))
+        _output_data(libsancuscrypt.mac(args.key, args.tag))
     else:
         with open(args.in_file, 'rb') as file:
             if args.gen_sm_key:

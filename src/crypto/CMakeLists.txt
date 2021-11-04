@@ -12,3 +12,9 @@ add_library(sancus-crypto SHARED ${SRC})
 
 install(TARGETS sancus-crypto
         LIBRARY DESTINATION ${INSTALL_BASE_DIR})
+
+set(PY_LIBS
+	libsancuscrypt.py
+)
+
+install(FILES ${PY_LIBS}  DESTINATION ${INSTALL_PYTHON_LIBS_DIR}/sancus)
