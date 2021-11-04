@@ -23,6 +23,7 @@ set(EXTRA_FLAGS -I${CMAKE_SOURCE_DIR}/src/sancus_support)
 add_object(sm_output.o sm_output.c ${EXTRA_FLAGS})
 add_object(sm_input.o sm_input.c ${EXTRA_FLAGS})
 add_object(sm_set_key.o sm_set_key.c ${EXTRA_FLAGS})
+add_object(sm_attest.o sm_attest.c ${EXTRA_FLAGS})
 
 set(STUBS
     ${CMAKE_CURRENT_BINARY_DIR}/sm_entry.o
@@ -34,6 +35,7 @@ set(STUBS
     ${CMAKE_CURRENT_BINARY_DIR}/sm_output.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_input.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_set_key.o
+    ${CMAKE_CURRENT_BINARY_DIR}/sm_attest.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_mmio_entry.o
     ${CMAKE_CURRENT_BINARY_DIR}/sm_mmio_exclusive.o
 
