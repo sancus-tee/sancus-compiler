@@ -36,8 +36,24 @@ parser.add_argument('--opt-plugin',
 parser.add_argument('-gstabs+', action='store_true')
 parser.add_argument('-include', help="Add include flag as specified by gcc", action='append', default=[])
 
+# HACK: catch the -MF/-MT filename args here (used in cmake) as otherwise
+# they'll confuse the `in_files` parsing..
+parser.add_argument('-MF',
+                    nargs='?',
+                    default=None
+                   )
+parser.add_argument('-MT',
+                    nargs='?',
+                    default=None
+                   )
+
 args, cc_args = parser.parse_known_args()
 set_args(args)
+
+if args.MF:
+    cc_args += ['-MF', args.MF]
+if args.MT:
+    cc_args += ['-MT', args.MF]
 
 # Since we define our own MCU, remove the -mmcu argument.
 cc_args = [a for a in cc_args if not a.startswith('-mmcu')]
