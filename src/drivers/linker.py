@@ -13,6 +13,8 @@ import sancus.config
 import sancus.paths
 from sancus.sancus_config import SmParserError, SmConfigMalformedError, SmConfigParser, SmConfig
 
+from collections import defaultdict
+
 from common import *
 
 MAC_SIZE = int(sancus.config.SECURITY / 8)
@@ -278,10 +280,10 @@ mmio_sms = defaultdict(dict)
 existing_macs = []
 elf_relocations = defaultdict(list)
 
-added_set_key_stub = False
-added_attest_stub = False
-added_input_stub = False
-added_output_stub = False
+added_set_key_stub = defaultdict(bool)
+added_attest_stub  = defaultdict(bool)
+added_input_stub   = defaultdict(bool)
+added_output_stub  = defaultdict(bool)
 
 # Create the list of all input files to be scanned for Sancus modules
 # These can either be the given input files, additional .o files or all files
@@ -412,42 +414,42 @@ while i < len(input_files_to_scan):
                 if match:
                     sm, which, name = match.groups()
 
-                    if not added_set_key_stub:
+                    if not added_set_key_stub[sm]:
                         # Generate the set key stub file
                         generated_file = create_io_stub(sm, 'sm_set_key.o')
                         generated_object_files.append(generated_file)
                         # And register it to also be scanned by this loop later
                         input_files_to_scan.append(generated_file)
-                        added_set_key_stub = True
+                        added_set_key_stub[sm] = True
 
-                    if not added_attest_stub:
+                    if not added_attest_stub[sm]:
                         # Generate the attest stub file
                         generated_file = create_io_stub(sm, 'sm_attest.o')
                         generated_object_files.append(generated_file)
                         # And register it to also be scanned by this loop later
                         input_files_to_scan.append(generated_file)
-                        added_attest_stub = True
+                        added_attest_stub[sm] = True
 
                     if which == 'input':
                         dest = sms_inputs
 
-                        if not added_input_stub:
+                        if not added_input_stub[sm]:
                             # Generate the input stub file
                             generated_file = create_io_stub(sm, 'sm_input.o')
                             generated_object_files.append(generated_file)
                             # And register it to also be scanned by this loop later
                             input_files_to_scan.append(generated_file)
-                            added_input_stub = True
+                            added_input_stub[sm] = True
                     else:
                         dest = sms_outputs
 
-                        if not added_output_stub:
+                        if not added_output_stub[sm]:
                             # Generate the input stub file
                             generated_file = create_io_stub(sm, 'sm_output.o')
                             generated_object_files.append(generated_file)
                             # And register it to also be scanned by this loop later
                             input_files_to_scan.append(generated_file)
-                            added_output_stub = True
+                            added_output_stub[sm] = True
 
                     if not sm in dest:
                         dest[sm] = []

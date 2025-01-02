@@ -19,7 +19,7 @@ add_object(sm_modhi3.o sm_modhi3.s)
 add_object(sm_umodhi3.o sm_umodhi3.s)
 
 include(UseSancusCC)
-set(EXTRA_FLAGS -I${CMAKE_SOURCE_DIR}/src/sancus_support)
+set(EXTRA_FLAGS -I${CMAKE_SOURCE_DIR}/src/sancus_support -Os)
 add_object(sm_output.o sm_output.c ${EXTRA_FLAGS})
 add_object(sm_input.o sm_input.c ${EXTRA_FLAGS})
 add_object(sm_set_key.o sm_set_key.c ${EXTRA_FLAGS})
