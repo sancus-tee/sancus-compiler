@@ -968,6 +968,8 @@ for sm in mmio_sms:
 for sm in existing_sms:
     text_sections.append(existing_text_section.format(sm))
     data_sections.append(existing_data_section.format(sm))
+    if args.prepare_for_sm_text_section_wrapping:
+        wrap_info_sections.append(wrap_info_section.format(sm, MAC_SIZE))
 
 for caller, callee in existing_macs:
     mac_sections.append(existing_mac_section.format(caller, callee))
